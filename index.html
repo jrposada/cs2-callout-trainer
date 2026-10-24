@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CS2 Callout Trainer</title>
+  <meta name="description" content="Learn Counter-Strike 2 map callouts on clean radars: explore, then drill yourself by finding and naming spots.">
+  <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="bar">
+      <a class="brand" href="./">
+        <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 1v6M12 17v6M1 12h6M17 12h6"/></svg>
+        <span>Callout Trainer</span>
+      </a>
+      <nav class="maps" id="mapList" aria-label="Maps"></nav>
+    </header>
+
+    <main class="main">
+      <section class="stage" id="stage" aria-label="Map radar">
+        <svg id="radar" class="radar" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Radar">
+          <image id="radarImg" x="0" y="0" width="1024" height="1024" preserveAspectRatio="none"/>
+          <g id="layerMarkers"></g>
+          <g id="layerFeedback"></g>
+        </svg>
+        <div class="stage-tools">
+          <div class="levels" id="levels" role="group" aria-label="Level"></div>
+          <div class="zoom" role="group" aria-label="Zoom">
+            <button type="button" id="zoomIn" aria-label="Zoom in">+</button>
+            <button type="button" id="zoomOut" aria-label="Zoom out">&minus;</button>
+            <button type="button" id="zoomReset" aria-label="Fit map">Fit</button>
+          </div>
+        </div>
+        <div class="stage-prompt" id="stagePrompt" aria-hidden="true"></div>
+        <div class="toast" id="toast" role="status" aria-live="polite"></div>
+      </section>
+
+      <aside class="panel">
+        <div class="modes" role="tablist" aria-label="Mode">
+          <button type="button" role="tab" data-mode="explore">Explore</button>
+          <button type="button" role="tab" data-mode="find">Find it</button>
+          <button type="button" role="tab" data-mode="name">Name it</button>
+          <button type="button" role="tab" data-mode="edit">Edit</button>
+        </div>
+        <div class="panel-body" id="panelBody"></div>
+      </aside>
+    </main>
+  </div>
+
+  <script src="data/maps.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
