@@ -93,6 +93,17 @@
     return p;
   }
   const ptsStr = (c) => ptsOf(c).map((p) => `${p.x},${p.y}`).join(" ");
+  const flatOf = (c) => ptsOf(c).flatMap((p) => [Math.round(p.x), Math.round(p.y)]);
+  // An axis-aligned four-corner zone; corner drags keep it that way.
+  function isRect(c) {
+    const p = ptsOf(c);
+    if (p.length !== 4) return false;
+    for (let i = 0; i < 4; i++) {
+      const a = p[i], b = p[(i + 1) % 4];
+      if (a.x !== b.x && a.y !== b.y) return false;
+    }
+    return true;
+  }
   function pointInPoly(p, pts) {
     let inside = false;
     for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
@@ -240,17 +251,26 @@
         type: "maybe", start: { x: e.clientX, y: e.clientY }, ctm, view0: state.view.slice(),
         p0: clientToSvg(e.clientX, e.clientY, ctm),
       };
+      const sel = state.mode === "edit" && selectedCallout();
       if (handle) {
-        const c = selectedCallout();
+        const c = sel;
         if (handle.classList.contains("vertex")) {
           gesture.type = "vertex";
           gesture.i = Number(handle.dataset.i);
+          gesture.rect = isRect(c);
+          gesture.orig = flatOf(c);
           state.vertex = gesture.i;
-          c.poly = (c.poly && c.poly.length >= 6) ? c.poly.slice() : ptsOf(c).flatMap((q) => [Math.round(q.x), Math.round(q.y)]);
+          c.poly = flatOf(c);
           renderHandles();
         } else {
           gesture.type = "anchor";
         }
+        gesture.moved = false;
+      } else if (sel && sel.level === state.level && (calloutAt(gesture.p0) || {}).id === sel.id) {
+        // Dragging inside the selected zone moves the whole zone and its name.
+        gesture.type = "zone";
+        gesture.orig = flatOf(sel);
+        gesture.xy = { x: sel.x, y: sel.y };
         gesture.moved = false;
       }
     } else if (pointers.size === 2) {
@@ -284,14 +304,28 @@
       const p = clientToSvg(e.clientX, e.clientY, gesture.ctm);
       const [x, y, w, h] = gesture.view0;
       setView([x - (p.x - gesture.p0.x), y - (p.y - gesture.p0.y), w, h]);
-    } else if (gesture.type === "vertex" || gesture.type === "anchor") {
+    } else if (gesture.type === "vertex" || gesture.type === "anchor" || gesture.type === "zone") {
       const p = clientToSvg(e.clientX, e.clientY);
       const x = Math.round(Math.max(0, Math.min(1024, p.x))), y = Math.round(Math.max(0, Math.min(1024, p.y)));
       const c = selectedCallout();
       if (!c) return;
+      if (!gesture.moved && Math.hypot(e.clientX - gesture.start.x, e.clientY - gesture.start.y) < 3) return;
       gesture.moved = true;
-      if (gesture.type === "vertex") { c.poly[gesture.i * 2] = x; c.poly[gesture.i * 2 + 1] = y; }
-      else { c.x = x; c.y = y; }
+      if (gesture.type === "vertex") {
+        const i = gesture.i, o = gesture.orig;
+        c.poly[i * 2] = x; c.poly[i * 2 + 1] = y;
+        if (gesture.rect) {
+          // Keep rectangles rectangular: the neighbours follow the dragged corner.
+          const prev = (i + 3) % 4, next = (i + 1) % 4;
+          const prevSharesX = o[prev * 2] === o[i * 2];
+          if (prevSharesX) { c.poly[prev * 2] = x; c.poly[next * 2 + 1] = y; }
+          else { c.poly[prev * 2 + 1] = y; c.poly[next * 2] = x; }
+        }
+      } else if (gesture.type === "zone") {
+        const dx = Math.round(p.x - gesture.p0.x), dy = Math.round(p.y - gesture.p0.y);
+        c.poly = gesture.orig.map((v, k) => v + (k % 2 ? dy : dx));
+        c.x = gesture.xy.x + dx; c.y = gesture.xy.y + dy;
+      } else { c.x = x; c.y = y; }
       updateZoneDom(c);
     }
   });
@@ -302,8 +336,9 @@
     if (gesture.type === "maybe" && pointers.size === 0) {
       const p = clientToSvg(e.clientX, e.clientY);
       onMapClick(p);
-    } else if (gesture.type === "vertex" || gesture.type === "anchor") {
+    } else if (gesture.type === "vertex" || gesture.type === "anchor" || gesture.type === "zone") {
       if (gesture.moved) commitEdit(selectedCallout());
+      else if (gesture.type === "zone") onMapClick(clientToSvg(e.clientX, e.clientY));
       else renderPanel();
     }
     if (pointers.size === 0) { gesture = null; svg.classList.remove("is-panning"); }
@@ -569,12 +604,15 @@
     const n = edits[m.id] ? Object.keys(edits[m.id]).length : 0;
     const npts = sel ? ptsOf(sel).length : 0;
     panel.innerHTML = `
-      <p class="lede">Click a zone to select it. Drag its corner points to reshape it and the round handle to move its name. ${TOUCH ? "" : "Double-click an edge to add a point. "}Changes save in this browser and are used by the quizzes straight away. Export them to update the site for everyone.</p>
+      <p class="lede">Click a zone to select it. Drag inside it to move it, drag a corner to resize it, and drag the round handle to move its name. Zones don't need to cover the whole map. Changes save in this browser and are used by the quizzes straight away. Export them to update the site for everyone.</p>
       ${sel ? `${calloutCard(sel)}
         <div class="row">
-          <span class="field-label">${sel.area ? "Area" : "Spot"}, ${npts} points</span><span class="spacer"></span>
-          <button type="button" class="btn small" id="addPt">Add point</button>
-          <button type="button" class="btn small" id="delPt" ${state.vertex == null || npts <= 3 ? "disabled" : ""}>Delete point</button>
+          <span class="field-label">${sel.area ? "Area" : "Spot"}, ${isRect(sel) ? "rectangle" : `${npts}-point shape`}</span><span class="spacer"></span>
+          ${isRect(sel)
+            ? `<button type="button" class="btn small" id="addPt" title="Turn this zone into a shape with an extra corner">Add corner</button>`
+            : `<button type="button" class="btn small" id="addPt">Add point</button>
+               <button type="button" class="btn small" id="delPt" ${state.vertex == null || npts <= 3 ? "disabled" : ""}>Delete point</button>
+               <button type="button" class="btn small" id="toRect">Make rectangle</button>`}
         </div>
         ${sel.edited ? `<div class="row"><span class="spacer"></span><button type="button" class="btn small quiet" id="undoOne">Undo changes to ${esc(sel.name)}</button></div>` : ""}`
         : `<div class="card"><p class="desc" style="margin:0">Pick a zone on the map to select it.</p></div>`}
@@ -601,7 +639,17 @@
         const a = pts[i], b = pts[(i + 1) % pts.length];
         insertVertex(sel, i, Math.round((a.x + b.x) / 2), Math.round((a.y + b.y) / 2));
       };
-      $("#delPt").onclick = () => deleteVertex(sel, state.vertex);
+      const dp = $("#delPt");
+      if (dp) dp.onclick = () => deleteVertex(sel, state.vertex);
+      const tr = $("#toRect");
+      if (tr) tr.onclick = () => {
+        const pts = ptsOf(sel);
+        const xs = pts.map((p) => Math.round(p.x)), ys = pts.map((p) => Math.round(p.y));
+        const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+        sel.poly = [x0, y0, x1, y0, x1, y1, x0, y1];
+        state.vertex = null;
+        commitEdit(sel);
+      };
     }
     const u = $("#undoOne");
     if (u) u.onclick = () => { delete edits[m.id][sel.id]; state.vertex = null; saveEdits(); };

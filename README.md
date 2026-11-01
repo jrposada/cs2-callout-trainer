@@ -10,9 +10,9 @@ Cobblestone is not included because it is not in CS2, so there is no CS2 radar f
 - **Explore** – every callout is a zone on the radar. Hover or tap a zone, or search the list, to see its name, other names and what it is. Toggle all names on or off.
 - **Find it** – you get a name and click anywhere inside its zone. On a miss you see how many metres outside it you were and which zone you clicked.
 - **Name it** – a zone lights up on the radar; pick its name from four nearby callouts (keys `1`–`4`).
-- **Edit** – select a zone and drag its corner points to reshape it, or drag the round handle to move its name. Add points with **Add point** or a double-click on an edge; remove the selected point with **Delete point** or the Delete key. Then copy or download that map's data.
+- **Edit** – select a zone, drag inside it to move it, drag a corner to resize it, or drag the round handle to move its name. Rectangles stay rectangles; **Add corner** (or a double-click on an edge) turns one into a free shape for the rare zone that needs it, and **Make rectangle** turns it back. Then copy or download that map's data.
 
-Zones are layered. **Areas** (rooms, corridors, site zones) cover the whole floor between them; **spots** (boxes, corners, small positions) sit on top. Clicking a spot that lies inside an area counts for both: Default on A Site is a correct answer for *A Site* and for *Default*.
+Zones are rectangles by default and don't need to cover the whole map. They are layered: **areas** (rooms, corridors, site zones) never overlap each other, and **spots** (boxes, corners, small positions) sit on top. Clicking a spot that lies inside an area counts for both: Default on A Site is a correct answer for *A Site* and for *Default*.
 
 Rounds are 10, 20 or every callout on the map. Callouts you miss come up more often, and a callout counts as learned after three correct answers in a row. Progress and edits are stored in the browser (localStorage). Two-level maps (Nuke, Vertigo) switch levels automatically during quizzes.
 
@@ -35,10 +35,10 @@ Counter-Strike and its map radars belong to Valve. This project is not affiliate
 
 ## Regenerating zones
 
-`tools/make_polygons.py` builds zones from the radar's floor. Areas listed in `tools/areas.json` split the floor between them by walking distance around walls; every other callout becomes a spot reaching about 160 game units from its name. By default it only fills in callouts that have no zone yet, so hand edits survive.
+`tools/make_polygons.py` grows a rectangle from each callout's name while the new edge is mostly floor, until it hits a wall, a neighbour or a size cap (about 1100 game units for areas listed in `tools/areas.json`, 230 for spots). By default it only fills in callouts that have no zone yet, so hand edits survive.
 
 ```sh
-pip install numpy pillow scipy scikit-image shapely
+pip install numpy pillow scipy
 python3 tools/make_polygons.py                 # only callouts without a zone
 python3 tools/make_polygons.py --map dust2 --force   # rebuild one map from scratch
 ```

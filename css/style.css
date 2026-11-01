@@ -113,6 +113,7 @@ button { cursor: pointer; }
 .zone.is-active { fill: rgba(226, 164, 59, 0.30); stroke: var(--t-gold); stroke-width: 2; }
 .zone.is-dim { opacity: .18; }
 .mode-explore .radar, .mode-edit .radar { cursor: pointer; }
+.mode-edit .zone.is-active { cursor: move; }
 
 .label, .fb-label {
   font: 600 13px var(--display);
