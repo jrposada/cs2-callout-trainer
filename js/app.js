@@ -193,15 +193,22 @@
     if (!m.callouts.length) return 0;
     return m.callouts.reduce((a, c) => a + calloutMastery(m.id, c.id), 0) / m.callouts.length;
   }
-  // Weighted pick: weak and unseen callouts come up more often.
+  // Up to this share of a round goes to seen callouts on a zero streak, most-missed first.
+  const WEAK_SHARE = 0.4;
+  // Weak callouts come back first; the rest is a weighted pick where weak seen callouts outweigh unseen ones.
   function pickRound(pool, n) {
-    const items = pool.map((c) => {
-      const r = progress[state.map.id] && progress[state.map.id][c.id];
-      const w = 1 + 3 * (1 - calloutMastery(state.map.id, c.id)) + (r ? 0 : 1.5);
+    const P = progress[state.map.id] || {};
+    const misses = (c) => P[c.id].s - P[c.id].c;
+    n = Math.min(n, pool.length);
+    const weak = shuffle(pool.filter((c) => P[c.id] && P[c.id].s > 0 && P[c.id].k === 0)).sort((a, b) => misses(b) - misses(a));
+    const picked = weak.slice(0, Math.floor(n * WEAK_SHARE));
+    const rest = pool.filter((c) => !picked.includes(c)).map((c) => {
+      const r = P[c.id];
+      const w = r ? 1 + 4 * (1 - calloutMastery(state.map.id, c.id)) + Math.min(r.s - r.c, 4) : 3;
       return { c, key: Math.pow(Math.random(), 1 / w) };
     });
-    items.sort((a, b) => b.key - a.key);
-    return items.slice(0, Math.min(n, items.length)).map((i) => i.c);
+    rest.sort((a, b) => b.key - a.key);
+    return shuffle(picked.concat(rest.slice(0, n - picked.length).map((i) => i.c)));
   }
 
   // ---------- view / pan / zoom ----------
