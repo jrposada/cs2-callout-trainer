@@ -682,7 +682,10 @@
     renderPanel();
     if (center) { centerOn(c, 1.8); panel.scrollTop = 0; }
     const active = panel.querySelector(".callout-list .is-active");
-    if (active && !center && !NARROW.matches) {
+    // Narrow screens have no room for a sticky card, so a radar tap brings the card itself into view.
+    const card = !center && NARROW.matches && panel.querySelector(".card");
+    if (card) card.scrollIntoView({ block: "nearest" });
+    else if (active && !center && !NARROW.matches) {
       // Keep the row clear of the sticky card when bringing it into view.
       const card = panel.querySelector(".card.is-sticky");
       panel.style.scrollPaddingTop = card ? `${card.offsetHeight + 28}px` : "";
@@ -935,9 +938,17 @@
         ${levelChip}
       </div>
       ${r ? resultBlock(r, c) : `<p class="kbd-hint">${TOUCH ? "Tap the radar. Drag to pan, pinch to zoom." : "Click the radar. Drag to pan, scroll to zoom."}</p>`}
-      ${r ? `<div class="row"><button type="button" class="btn primary" id="next">${q.i + 1 < q.items.length ? "Next callout" : "See results"}</button>${enterHint()}</div>` : ""}
-      <div class="row"><span class="spacer"></span><button type="button" class="btn quiet small" id="quit">End round</button></div>`;
+      ${stepActions(r, "Next callout")}`;
     bindStepButtons();
+  }
+
+  // Next (once answered) and End round. On narrow screens the wrapper is a bar stuck to the panel's foot.
+  function stepActions(r, nextLabel) {
+    const q = state.quiz;
+    return `<div class="step-actions">
+      ${r ? `<div class="row"><button type="button" class="btn primary" id="next">${q.i + 1 < q.items.length ? nextLabel : "See results"}</button>${enterHint()}</div>` : ""}
+      <div class="row"><span class="spacer"></span><button type="button" class="btn quiet small" id="quit">End round</button></div>
+    </div>`;
   }
 
   // Keyboard hint next to Next; touch screens have no Enter key to point at.
@@ -1023,8 +1034,7 @@
         }).join("")}
       </div>
       ${r ? resultBlock(r, c) : `<p class="kbd-hint">${TOUCH ? "Tap a name." : "Press <kbd>1</kbd> to <kbd>4</kbd> to answer."}</p>`}
-      ${r ? `<div class="row"><button type="button" class="btn primary" id="next">${q.i + 1 < q.items.length ? "Next zone" : "See results"}</button>${enterHint()}</div>` : ""}
-      <div class="row"><span class="spacer"></span><button type="button" class="btn quiet small" id="quit">End round</button></div>`;
+      ${stepActions(r, "Next zone")}`;
     $("#choices").onclick = (e) => { const b = e.target.closest("button[data-id]"); if (b) answerName(b.dataset.id); };
     bindStepButtons();
   }
