@@ -15,6 +15,20 @@
   const BASE = window.CALLOUT_MAPS || [];
   let edits = store.get(K.edits, {});
   let progress = store.get(K.progress, {});
+  // Progress is kept per quiz mode: progress[map][id] = { find: {s, c, k}, name: {s, c, k} }.
+  // Older saves held one {s, c, k} per callout; that record moves into find (Find it was the headline drill).
+  (function migrateProgress() {
+    let moved = false;
+    for (const mapId in progress) {
+      const P = progress[mapId];
+      if (!P || typeof P !== "object") continue;
+      for (const id in P) {
+        const r = P[id];
+        if (r && typeof r.s === "number" && !r.find && !r.name) { P[id] = { find: { s: r.s, c: r.c || 0, k: r.k || 0 } }; moved = true; }
+      }
+    }
+    if (moved) store.set(K.progress, progress);
+  })();
   const prefs = Object.assign({ map: BASE[0] && BASE[0].id, mode: "explore", labels: false, round: 10 }, store.get(K.prefs, {}));
 
   // Maps with the user's local position edits applied.
@@ -192,26 +206,33 @@
   }
 
   // ---------- progress ----------
-  function rec(mapId, id) {
-    progress[mapId] = progress[mapId] || {};
-    return (progress[mapId][id] = progress[mapId][id] || { s: 0, c: 0, k: 0 });
+  // The record a quiz mode trains; Explore and Edit read Find it's.
+  const progMode = (mode) => (mode === "name" ? "name" : "find");
+  // A callout's record for one mode, or undefined if that mode never asked it.
+  function recOf(mapId, id, mode) {
+    const r = progress[mapId] && progress[mapId][id];
+    return r ? r[progMode(mode)] : undefined;
   }
-  function score(mapId, id, ok) {
-    const r = rec(mapId, id);
+  function rec(mapId, id, mode) {
+    const P = (progress[mapId] = progress[mapId] || {});
+    const r = (P[id] = P[id] || {});
+    return (r[progMode(mode)] = r[progMode(mode)] || { s: 0, c: 0, k: 0 });
+  }
+  function score(mapId, id, ok, mode) {
+    const r = rec(mapId, id, mode);
     r.s += 1;
     if (ok) { r.c += 1; r.k += 1; } else { r.k = 0; }
     store.set(K.progress, progress);
   }
-  function calloutMastery(mapId, id) {
-    const r = progress[mapId] && progress[mapId][id];
+  function calloutMastery(mapId, id, mode) {
+    const r = recOf(mapId, id, mode);
     return r ? Math.min(r.k, MASTER_STREAK) / MASTER_STREAK : 0;
   }
   // Learned = streak of MASTER_STREAK or more; learning = seen but not learned; fresh = never asked.
-  function mapCounts(m) {
-    const P = progress[m.id] || {};
+  function mapCounts(m, mode) {
     const n = { learned: 0, learning: 0, fresh: 0, total: m.callouts.length };
     for (const c of m.callouts) {
-      const r = P[c.id];
+      const r = recOf(m.id, c.id, mode);
       if (!r || !r.s) n.fresh++;
       else if (r.k >= MASTER_STREAK) n.learned++;
       else n.learning++;
@@ -226,14 +247,14 @@
   const WEAK_SHARE = 0.4;
   // Weak callouts come back first; the rest is a weighted pick where weak seen callouts outweigh unseen ones.
   function pickRound(pool, n) {
-    const P = progress[state.map.id] || {};
-    const misses = (c) => P[c.id].s - P[c.id].c;
+    const mode = state.mode, R = (c) => recOf(state.map.id, c.id, mode);
+    const misses = (c) => R(c).s - R(c).c;
     n = Math.min(n, pool.length);
-    const weak = shuffle(pool.filter((c) => P[c.id] && P[c.id].s > 0 && P[c.id].k === 0)).sort((a, b) => misses(b) - misses(a));
+    const weak = shuffle(pool.filter((c) => R(c) && R(c).s > 0 && R(c).k === 0)).sort((a, b) => misses(b) - misses(a));
     const picked = weak.slice(0, Math.floor(n * WEAK_SHARE));
     const rest = pool.filter((c) => !picked.includes(c)).map((c) => {
-      const r = P[c.id];
-      const w = r ? 1 + 4 * (1 - calloutMastery(state.map.id, c.id)) + Math.min(r.s - r.c, 4) : 3;
+      const r = R(c);
+      const w = r ? 1 + 4 * (1 - calloutMastery(state.map.id, c.id, mode)) + Math.min(r.s - r.c, 4) : 3;
       return { c, key: Math.pow(Math.random(), 1 / w) };
     });
     rest.sort((a, b) => b.key - a.key);
@@ -576,8 +597,9 @@
       b.type = "button";
       b.className = "map-btn";
       b.setAttribute("aria-current", String(state.map && m.id === state.map.id));
-      const n = mapCounts(m);
-      b.title = `${m.name}: ${n.learned} / ${n.total} learned`;
+      // Map buttons follow Find it, the harder drill.
+      const n = mapCounts(m, "find");
+      b.title = `${m.name}: ${n.learned} / ${n.total} learned in Find it`;
       b.innerHTML = `${esc(m.name)}<span class="mastery"><i style="width:${n.total ? (100 * n.learned) / n.total : 0}%"></i></span>`;
       b.onclick = () => { if (m.id !== state.map.id && canLeave("map:" + m.id)) selectMap(m.id); };
       nav.appendChild(b);
@@ -665,14 +687,18 @@
     return c.name.toLowerCase().includes(q) || c.alt.some((a) => a.toLowerCase().includes(q));
   }
 
-  function calloutCard(c, cls = "") {
-    const r = progress[state.map.id] && progress[state.map.id][c.id];
+  // Status of one callout in each quiz mode, e.g. "Find it: Learned. Name it: 2 of 3 in a row."
+  function modeStatus(mapId, id, mode) {
+    const r = recOf(mapId, id, mode);
     const ratio = r && r.s ? ` <span class="lifetime">${r.c} of ${r.s} right overall.</span>` : "";
+    return `<span class="mode-st">${mode === "name" ? "Name it" : "Find it"}: <span class="status">${calloutStatus(r)}.</span>${ratio}</span>`;
+  }
+  function calloutCard(c, cls = "") {
     return `<div class="card ${cls}">
       <h3>${esc(c.name)}</h3>
       ${c.alt.length ? `<p class="alt">Also called ${c.alt.map(esc).join(", ")}</p>` : ""}
       <p class="desc">${esc(c.desc)}</p>
-      <div class="meta">${state.map.levels.length > 1 ? esc(levelName(c.level)) + ". " : ""}<span class="status">${calloutStatus(r)}.</span>${ratio}</div>
+      <div class="meta">${state.map.levels.length > 1 ? `<span class="mode-st">${esc(levelName(c.level))}.</span>` : ""}${modeStatus(state.map.id, c.id, "find")}${modeStatus(state.map.id, c.id, "name")}</div>
     </div>`;
   }
 
@@ -693,7 +719,7 @@
         ${list.map((c) => `<li><button type="button" data-id="${c.id}" class="${c.id === state.selected ? "is-active" : ""}">
             <span class="nm">${esc(c.name)}</span>
             ${m.levels.length > 1 && c.level === "lower" ? `<span class="lv">lower</span>` : ""}
-            <span class="ms" title="${calloutStatus(progress[m.id] && progress[m.id][c.id])}"><i style="width:${calloutMastery(m.id, c.id) * 100}%"></i></span>
+            <span class="ms" title="Find it: ${calloutStatus(recOf(m.id, c.id, "find"))}. Name it: ${calloutStatus(recOf(m.id, c.id, "name"))}."><span><i style="width:${calloutMastery(m.id, c.id, "find") * 100}%"></i></span><span><i style="width:${calloutMastery(m.id, c.id, "name") * 100}%"></i></span></span>
           </button></li>`).join("") || `<li class="lede">No callout matches “${esc(state.search)}”.</li>`}
       </ul>
       ${footer()}`;
@@ -931,7 +957,7 @@
     const q = state.quiz;
     // Find it: the target name sits on the radar until you answer (a pill on wide screens).
     const sp = $("#stagePrompt");
-    sp.textContent = state.mode === "find" && q && !q.done && !q.answered ? current().name : "";
+    sp.textContent = state.mode === "find" && q && !q.done && !q.answered ? (isRetry() ? "Again: " : "") + current().name : "";
     sp.classList.toggle("is-find", !!sp.textContent);
     if (!q) return renderQuizSetup();
     if (q.done) return renderQuizSummary();
@@ -940,8 +966,9 @@
 
   function renderQuizSetup() {
     const m = state.map;
-    const n = mapCounts(m);
+    const n = mapCounts(m, state.mode);
     const isFind = state.mode === "find";
+    const seen = progress[m.id] && Object.keys(progress[m.id]).length;
     const sizes = [10, 20, 0];
     const ne = editCount(m);
     panel.innerHTML = `
@@ -956,13 +983,13 @@
       <div class="row"><button type="button" class="btn primary" id="start">Start ${esc(m.name)} round</button></div>
       <div class="breakdown">
         <p class="counts"><strong class="n-learned">${n.learned} learned</strong> · <span class="n-learning">${n.learning} learning</span> · <span class="n-new">${n.fresh} new</span></p>
-        <p class="lede">A callout counts as learned after ${MASTER_STREAK} correct answers in a row.</p>
-        ${n.fresh < n.total ? `<button type="button" class="link-btn" id="resetProgress">Reset ${esc(m.name)} progress</button>` : ""}
+        <p class="lede">In ${isFind ? "Find it" : "Name it"}, a callout counts as learned after ${MASTER_STREAK} correct answers in a row. ${isFind ? "Name it" : "Find it"} keeps its own count.</p>
+        ${seen ? `<button type="button" class="link-btn" id="resetProgress">Reset ${esc(m.name)} progress</button>` : ""}
       </div>
       ${footer()}`;
     const rp = $("#resetProgress");
     if (rp) rp.onclick = () => {
-      if (!confirm(`Reset your ${m.name} progress? Every ${m.name} callout goes back to new. Other maps keep theirs.`)) return;
+      if (!confirm(`Reset your ${m.name} progress? Every ${m.name} callout goes back to new in both Find it and Name it. Other maps keep theirs.`)) return;
       delete progress[m.id];
       store.set(K.progress, progress);
       renderMapList();
@@ -982,12 +1009,28 @@
     let pool = m.callouts;
     if (onlyIds) pool = pool.filter((c) => onlyIds.includes(c.id));
     const n = onlyIds ? pool.length : (prefs.round || pool.length);
-    state.quiz = { items: pickRound(pool, n), i: 0, results: [], answered: false, done: false };
+    // learned0 is the map's learned count before the round, for the summary's "9 → 12 learned".
+    // retry[i] marks a re-asked miss and stays index-aligned with items.
+    const items = pickRound(pool, n);
+    state.quiz = { items, i: 0, results: [], answered: false, done: false, learned0: mapCounts(m, state.mode).learned,
+      retry: items.map(() => false), requeued: new Set() };
     fitView();
     prepareStep();
   }
 
   function current() { return state.quiz.items[state.quiz.i]; }
+  const isRetry = () => !!state.quiz.retry[state.quiz.i];
+  // A first miss comes back 3 or 4 questions later (or last), once per callout per round.
+  function requeue(c) {
+    const q = state.quiz;
+    if (isRetry() || q.requeued.has(c.id)) return false;
+    q.requeued.add(c.id);
+    const at = Math.min(q.i + 3 + Math.floor(Math.random() * 2), q.items.length);
+    q.items.splice(at, 0, c);
+    q.retry.splice(at, 0, true);
+    return true;
+  }
+  const AGAIN_NOTE = "It comes back in a few questions.";
 
   function prepareStep() {
     const q = state.quiz;
@@ -1004,7 +1047,8 @@
       showTarget(c);
       rescaleMarks();
     }
-    announce(`Question ${q.i + 1} of ${q.items.length}.${state.mode === "find" ? ` Where is ${c.name}?` : ""}`);
+    const again = isRetry() ? " Again:" : "";
+    announce(`Question ${q.i + 1} of ${q.items.length}.${state.mode === "find" ? `${again} Where is ${c.name}?` : again ? " Again: what is this zone called?" : ""}`);
     // Keyboard users start each question where they answer it: the first name, or the Find target.
     const f = panel.querySelector(state.mode === "name" ? ".choice" : ".callname");
     if (f) f.focus({ preventScroll: true });
@@ -1024,7 +1068,8 @@
     const q = state.quiz;
     return `<div class="progress" aria-hidden="true">${q.items.map((_, i) => {
       const r = q.results[i];
-      return `<span class="${r ? r.kind : i === q.i ? "now" : ""}"></span>`;
+      const cls = (r ? r.kind : i === q.i ? "now" : "") + (q.retry[i] ? " again" : "");
+      return `<span class="${cls.trim()}"></span>`;
     }).join("")}</div>`;
   }
 
@@ -1035,7 +1080,7 @@
     panel.innerHTML = `
       ${progressBar()}
       <div class="prompt">
-        <p class="ask">Question ${q.i + 1} of ${q.items.length}. Where is</p>
+        <p class="ask">Question ${q.i + 1} of ${q.items.length}. ${isRetry() ? `<span class="again-tag">Again:</span> where` : "Where"} is</p>
         <h2 class="callname" tabindex="-1">${esc(c.name)}</h2>
         ${c.alt.length ? `<p class="hint">Also called ${c.alt.map(esc).join(", ")}</p>` : ""}
         ${levelChip}
@@ -1077,6 +1122,7 @@
       const pick = r.kind !== "hit" && state.map.callouts.find((o) => o.id === r.pick);
       if (pick && pick.level !== c.level) detail += ` You picked <strong>${esc(pick.name)}</strong> (${pick.level} level).`;
     }
+    if (r.again) detail = (detail ? detail + " " : "") + AGAIN_NOTE;
     const alt = state.mode === "name" && c.alt.length ? `<p class="alt">Also called ${c.alt.map(esc).join(", ")}</p>` : "";
     return `<div class="result ${r.kind}"><h4>${titles[r.kind]}</h4>${detail ? `<p class="detail">${detail}</p>` : ""}<p class="desc">${esc(c.desc)}</p>${alt}</div>`;
   }
@@ -1102,12 +1148,13 @@
     const kind = inside || alias ? "hit" : edge.d <= CLOSE_PX ? "close" : "miss";
     const q = state.quiz;
     q.answered = true;
-    q.results[q.i] = { kind, d: kind === "hit" ? 0 : edge.d, near, alias, id: c.id };
+    q.results[q.i] = { kind, d: kind === "hit" ? 0 : edge.d, near, alias, id: c.id, p: { x: p.x, y: p.y } };
     // Zone edges are hand-placed and approximate, so "close" counts as correct.
-    score(state.map.id, c.id, kind !== "miss");
+    score(state.map.id, c.id, kind !== "miss", "find");
+    if (kind === "miss") q.results[q.i].again = requeue(c);
     const clicked = near && near.id !== c.id ? ` You clicked ${near.name}.` : "";
     announce(kind === "hit" ? `Right spot.${alias ? clicked : ""}`
-      : `${kind === "close" ? "Close" : "Missed"}, ${meters(edge.d)} metre${meters(edge.d) === 1 ? "" : "s"} outside ${c.name}.${clicked}`);
+      : `${kind === "close" ? "Close" : "Missed"}, ${meters(edge.d)} metre${meters(edge.d) === 1 ? "" : "s"} outside ${c.name}.${clicked}${q.results[q.i].again ? " " + AGAIN_NOTE : ""}`);
     // feedback on the radar: the zone you clicked (if it wasn't a hit), then the answer on top
     const wrong = kind !== "hit" && near && near.id !== c.id ? near : null;
     if (wrong) fbPoly("fb-wrong", wrong);
@@ -1129,7 +1176,7 @@
     panel.innerHTML = `
       ${progressBar()}
       <div class="prompt">
-        <p class="ask">Question ${q.i + 1} of ${q.items.length}. What is the highlighted zone called?</p>
+        <p class="ask">Question ${q.i + 1} of ${q.items.length}. ${isRetry() ? `<span class="again-tag">Again:</span> what` : "What"} is the highlighted zone called?</p>
         ${state.map.levels.length > 1 ? `<p class="hint"><span class="chip">${esc(levelName(c.level))}</span></p>` : ""}
       </div>
       <div class="choices" id="choices">
@@ -1153,8 +1200,9 @@
     q.answered = true;
     q.choice = id;
     q.results[q.i] = { kind: ok ? "hit" : "miss", id: c.id, pick: id };
-    score(state.map.id, c.id, ok);
-    announce(ok ? "Correct." : `Wrong. That zone is ${c.name}.`);
+    score(state.map.id, c.id, ok, "name");
+    if (!ok) q.results[q.i].again = requeue(c);
+    announce(ok ? "Correct." : `Wrong. That zone is ${c.name}.${q.results[q.i].again ? " " + AGAIN_NOTE : ""}`);
     clearFeedback();
     if (!ok) {
       const wrong = state.map.callouts.find((o) => o.id === id);
@@ -1192,28 +1240,69 @@
     return total < all ? `Clean round. Try All ${all} or another map.` : "Clean round. Try another map.";
   }
 
-  function renderQuizSummary() {
+  // Summary radar: every missed zone with its name and, in Find it, each click that missed it.
+  // The zone picked in the list (q.focus) is drawn last, as the highlighted target.
+  function drawSummary(missed) {
     const q = state.quiz;
+    clearFeedback();
+    const here = missed.filter((c) => c.level === state.level);
+    const focus = here.find((c) => c.id === q.focus);
+    for (const c of here) if (c !== focus) fbPoly("fb-answer", c);
+    if (focus) fbPoly("fb-target", focus);
+    for (const r of q.results) {
+      if (r.kind === "miss" && r.p && here.some((c) => c.id === r.id)) fbCircle("fb-guess", r.p, 5);
+    }
+    for (const c of here) if (c !== focus) fbLabel(c, c.name, 0, 4.5);
+    if (focus) fbLabel(focus, focus.name, 0, 4.5);
+    rescaleMarks();
+  }
+
+  function renderQuizSummary() {
+    const q = state.quiz, m = state.map;
     const total = q.results.length;
     const hits = q.results.filter((r) => r.kind !== "miss").length;
-    const missed = q.results.filter((r) => r.kind === "miss").map((r) => state.map.callouts.find((c) => c.id === r.id));
-    if (!q.told) { q.told = true; announce(`Round over, ${hits} of ${total}.`); }
+    const missed = [...new Set(q.results.filter((r) => r.kind === "miss").map((r) => r.id))].map((id) => m.callouts.find((c) => c.id === id));
+    const learned = mapCounts(m, state.mode).learned, gain = learned - (q.learned0 || 0);
+    const first = !q.told;
+    if (first) {
+      q.told = true;
+      announce(`Round over, ${hits} of ${total}.`);
+      // Start on a level that has something to review, with the whole map in view.
+      if (missed.length && !missed.some((c) => c.level === state.level)) setLevel(missed[0].level);
+      fitView();
+    }
     panel.innerHTML = `
       ${progressBar()}
       <div>
         <div class="score-big">${hits}<small> / ${total}</small></div>
-        <p class="lede">${hits === total ? cleanNext(total) : `${total - hits} to work on. They will come up more often next time.`}</p>
+        <p class="lede">${hits === total ? cleanNext(total) : `${missed.length} to work on, shown on the radar. They will come up more often next time.`}</p>
+        <p class="gain">${esc(m.name)}: ${q.learned0 || 0} → ${learned} learned in ${state.mode === "name" ? "Name it" : "Find it"} <span class="${gain > 0 ? "up" : ""}">(${gain > 0 ? "+" : gain < 0 ? "−" : "±"}${Math.abs(gain)})</span></p>
       </div>
-      ${missed.length ? `<ul class="missed">${missed.map((c) => `<li><b>${esc(c.name)}</b>. ${esc(c.desc)}</li>`).join("")}</ul>` : ""}
+      ${missed.length ? `<ul class="missed">${missed.map((c) => `<li><button type="button" data-id="${c.id}" aria-pressed="${c.id === q.focus}"><b>${esc(c.name)}</b>${m.levels.length > 1 && c.level === "lower" ? ` <span class="lv">lower</span>` : ""}. ${esc(c.desc)}</button></li>`).join("")}</ul>` : ""}
       <div class="row">
         ${missed.length ? `<button type="button" class="btn primary" id="retryMissed">Drill the ${missed.length} missed</button>` : ""}
         <button type="button" class="btn ${missed.length ? "" : "primary"}" id="again">New round</button>
       </div>
       ${footer()}`;
+    drawSummary(missed);
+    const ml = panel.querySelector(".missed");
+    if (ml) ml.onclick = (e) => {
+      const b = e.target.closest("button[data-id]"); if (!b) return;
+      const c = missed.find((x) => x.id === b.dataset.id);
+      q.focus = c.id;
+      if (c.level !== state.level) setLevel(c.level);
+      const top = panel.scrollTop;
+      renderQuizSummary();
+      panel.scrollTop = top;
+      centerOn(zoneCenter(c), 2);
+      announce(`${c.name}${m.levels.length > 1 ? `, ${levelName(c.level).toLowerCase()}` : ""}, centred on the radar.`);
+      const nb = panel.querySelector(`.missed button[data-id="${CSS.escape(c.id)}"]`);
+      if (nb) nb.focus({ preventScroll: true });
+    };
     const rm = $("#retryMissed");
     if (rm) rm.onclick = () => startRound(missed.map((c) => c.id));
     $("#again").onclick = () => startRound();
-    (rm || $("#again")).focus();
+    if (first) (rm || $("#again")).focus({ preventScroll: true });
   }
 
   // ---------- keyboard ----------
