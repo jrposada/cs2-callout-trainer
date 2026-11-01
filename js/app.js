@@ -448,12 +448,14 @@
     const u = unit();
     layerMarkers.querySelectorAll("text").forEach((t) => {
       t.setAttribute("font-size", (t.classList.contains("label-area") ? 14.5 : 13) * u);
+      t.setAttribute("stroke-width", 3.5 * u);
       t.setAttribute("dy", 4.5 * u);
     });
     layerEdit.querySelectorAll("[data-r]").forEach((n) => n.setAttribute("r", Number(n.dataset.r) * u));
     layerFb.querySelectorAll("[data-r]").forEach((n) => n.setAttribute("r", Number(n.dataset.r) * u));
     layerFb.querySelectorAll("text").forEach((t) => {
       t.setAttribute("font-size", 16 * u);
+      t.setAttribute("stroke-width", 3.5 * u);
       t.setAttribute("dx", t.dataset.dx * u);
       t.setAttribute("dy", t.dataset.dy * u);
     });

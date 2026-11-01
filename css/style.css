@@ -137,11 +137,12 @@ button { cursor: pointer; }
 .mode-explore .radar, .mode-edit .radar { cursor: pointer; }
 .mode-edit .zone.is-active { cursor: move; }
 
+/* Size and halo width are set per zoom in rescaleMarks(), so only family and weight here. */
 .label, .fb-label {
-  font: 600 13px var(--display);
+  font-family: var(--display); font-weight: 600;
   fill: var(--text);
   text-anchor: middle;
-  paint-order: stroke; stroke: rgba(14, 18, 23, .92); stroke-width: 3.5px; stroke-linejoin: round;
+  paint-order: stroke; stroke: rgba(14, 18, 23, .92); stroke-linejoin: round;
   pointer-events: none;
 }
 .label { display: none; }
