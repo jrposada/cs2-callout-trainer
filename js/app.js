@@ -948,7 +948,9 @@
     let detail;
     if (state.mode === "find") {
       if (r.kind === "hit") {
-        if (r.alias) detail = `You clicked <strong>${esc(r.near.name)}</strong>, which some teams also call ${esc(c.name)}.`;
+        if (r.alias) detail = r.near.alt.includes(c.name)
+          ? `You clicked <strong>${esc(r.near.name)}</strong>, which some teams also call ${esc(c.name)}.`
+          : `You clicked <strong>${esc(r.near.name)}</strong>, a name some teams also use for ${esc(c.name)}.`;
         else detail = r.near && r.near.id !== c.id ? `You clicked <strong>${esc(r.near.name)}</strong>, which is inside it.` : "";
       } else {
         detail = `You were <strong>${meters(r.d)} m</strong> outside it.`;
@@ -977,9 +979,12 @@
     const pts = ptsOf(c);
     const inside = pointInPoly(p, pts);
     const edge = inside ? { d: 0, x: p.x, y: p.y } : edgeNearest(p, pts);
-    const near = calloutAt(p);
     // A zone that goes by the target's name (either way round) is the same callout to a teammate.
-    const alias = !inside && !!near && (near.name === c.name || c.alt.includes(near.name) || near.alt.includes(c.name));
+    // Like areas and spots, any zone under the click counts, not only the topmost one.
+    const same = (o) => o.name === c.name || c.alt.includes(o.name) || o.alt.includes(c.name);
+    const aliasZone = inside ? null : levelCallouts().find((o) => o.id !== c.id && same(o) && pointInPoly(p, ptsOf(o)));
+    const alias = !!aliasZone;
+    const near = aliasZone || calloutAt(p);
     const kind = inside || alias ? "hit" : edge.d <= CLOSE_PX ? "close" : "miss";
     const q = state.quiz;
     q.answered = true;
