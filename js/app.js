@@ -581,6 +581,21 @@
       renderMarkers();
       const s2 = $("#search"); s2.focus(); s2.setSelectionRange(pos, pos);
     };
+    s.onkeydown = (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (!list.length) return;
+        selectCallout(list[0].id, true);
+        const s2 = $("#search"); s2.focus(); s2.setSelectionRange(s2.value.length, s2.value.length);
+      } else if (e.key === "Escape" && s.value) {
+        e.preventDefault();
+        s.value = "";
+        s.oninput();
+      } else if (e.key === "ArrowDown") {
+        const b = $("#list button[data-id]");
+        if (b) { e.preventDefault(); b.focus(); }
+      }
+    };
     $("#list").onclick = (e) => { const b = e.target.closest("button[data-id]"); if (b) selectCallout(b.dataset.id, true); };
   }
 
