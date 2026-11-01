@@ -153,6 +153,21 @@
     return best;
   }
 
+  // Screen-reader status: #sr-status lives outside the re-rendered panel, so nothing cuts it off.
+  // Clearing first lets the same sentence be announced twice in a row.
+  let srTimer;
+  function announce(msg) {
+    const n = $("#sr-status");
+    clearTimeout(srTimer);
+    n.textContent = "";
+    srTimer = setTimeout(() => { n.textContent = msg; }, 60);
+  }
+  let searchTimer;
+  function announceMatches(n) {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => announce(n ? `${n} callout${n === 1 ? "" : "s"} match` : "No callout matches"), 600);
+  }
+
   let toastTimer;
   function toast(msg, ms = 1800) {
     const t = $("#toast");
@@ -671,6 +686,7 @@
       state.search = s.value;
       const pos = s.selectionStart;
       renderExplore();
+      announceMatches(panel.querySelectorAll("#list button[data-id]").length);
       renderMarkers();
       const s2 = $("#search"); s2.focus(); s2.setSelectionRange(pos, pos);
     };
@@ -936,6 +952,7 @@
       showTarget(c);
       rescaleMarks();
     }
+    announce(`Question ${q.i + 1} of ${q.items.length}.${state.mode === "find" ? ` Where is ${c.name}?` : ""}`);
     // Keyboard users start each question where they answer it: the first name, or the Find target.
     const f = panel.querySelector(state.mode === "name" ? ".choice" : ".callname");
     if (f) f.focus({ preventScroll: true });
@@ -953,7 +970,7 @@
 
   function progressBar() {
     const q = state.quiz;
-    return `<div class="progress" aria-label="Question ${q.i + 1} of ${q.items.length}">${q.items.map((_, i) => {
+    return `<div class="progress" aria-hidden="true">${q.items.map((_, i) => {
       const r = q.results[i];
       return `<span class="${r ? r.kind : i === q.i ? "now" : ""}"></span>`;
     }).join("")}</div>`;
@@ -1036,6 +1053,9 @@
     q.results[q.i] = { kind, d: kind === "hit" ? 0 : edge.d, near, alias, id: c.id };
     // Zone edges are hand-placed and approximate, so "close" counts as correct.
     score(state.map.id, c.id, kind !== "miss");
+    const clicked = near && near.id !== c.id ? ` You clicked ${near.name}.` : "";
+    announce(kind === "hit" ? `Right spot.${alias ? clicked : ""}`
+      : `${kind === "close" ? "Close" : "Missed"}, ${meters(edge.d)} metres outside ${c.name}.${clicked}`);
     // feedback on the radar: the zone you clicked (if it wasn't a hit), then the answer on top
     const wrong = kind !== "hit" && near && near.id !== c.id ? near : null;
     if (wrong) fbPoly("fb-wrong", wrong);
@@ -1082,6 +1102,7 @@
     q.choice = id;
     q.results[q.i] = { kind: ok ? "hit" : "miss", id: c.id, pick: id };
     score(state.map.id, c.id, ok);
+    announce(ok ? "Correct." : `Wrong. That zone is ${c.name}.`);
     clearFeedback();
     if (!ok) {
       const wrong = state.map.callouts.find((o) => o.id === id);
@@ -1124,6 +1145,7 @@
     const total = q.results.length;
     const hits = q.results.filter((r) => r.kind !== "miss").length;
     const missed = q.results.filter((r) => r.kind === "miss").map((r) => state.map.callouts.find((c) => c.id === r.id));
+    if (!q.told) { q.told = true; announce(`Round over, ${hits} of ${total}.`); }
     panel.innerHTML = `
       ${progressBar()}
       <div>
