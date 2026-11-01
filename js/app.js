@@ -491,7 +491,17 @@
         box.appendChild(b);
       }
     }
+    svg.setAttribute("aria-label", `${state.map.name} radar${lv === "lower" ? ", lower level" : ""}`);
+    syncLevelButtons();
     if (refit) fitView();
+  }
+  // During an unfinished round the quiz picks the level, so the buttons say they're off.
+  function syncLevelButtons() {
+    const locked = !!state.quiz && !state.quiz.done;
+    for (const b of document.querySelectorAll("#levels button")) {
+      if (locked) { b.setAttribute("aria-disabled", "true"); b.title = "The quiz picks the level"; }
+      else { b.removeAttribute("aria-disabled"); b.removeAttribute("title"); }
+    }
   }
 
   // ---------- map list ----------
@@ -544,7 +554,7 @@
     prefs.mode = mode;
     store.set(K.prefs, prefs);
     document.body.className = "mode-" + mode;
-    document.querySelectorAll(".modes button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.mode === mode)));
+    document.querySelectorAll(".modes button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
     clearFeedback();
     renderMarkers();
     renderPanel();
@@ -566,6 +576,7 @@
     const q = state.quiz, step = !!q && !q.done && (state.mode === "find" || state.mode === "name");
     document.body.classList.toggle("quiz-step", step);
     document.body.classList.toggle("quiz-answered", step && q.answered);
+    syncLevelButtons();
     $("#stagePrompt").textContent = "";
     $("#stagePrompt").classList.remove("is-find");
     if (state.mode === "explore") return renderExplore();
