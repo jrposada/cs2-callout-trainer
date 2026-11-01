@@ -1055,7 +1055,7 @@
     score(state.map.id, c.id, kind !== "miss");
     const clicked = near && near.id !== c.id ? ` You clicked ${near.name}.` : "";
     announce(kind === "hit" ? `Right spot.${alias ? clicked : ""}`
-      : `${kind === "close" ? "Close" : "Missed"}, ${meters(edge.d)} metres outside ${c.name}.${clicked}`);
+      : `${kind === "close" ? "Close" : "Missed"}, ${meters(edge.d)} metre${meters(edge.d) === 1 ? "" : "s"} outside ${c.name}.${clicked}`);
     // feedback on the radar: the zone you clicked (if it wasn't a hit), then the answer on top
     const wrong = kind !== "hit" && near && near.id !== c.id ? near : null;
     if (wrong) fbPoly("fb-wrong", wrong);
