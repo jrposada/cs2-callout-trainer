@@ -37,6 +37,7 @@
   const CLOSE_PX = 24;     // radar px outside a zone that still counts as "close"
   const INCH_TO_M = 0.0254; // 1 Hammer unit ~ 1 inch
   const TOUCH = window.matchMedia && matchMedia("(pointer: coarse)").matches;
+  const NARROW = window.matchMedia ? matchMedia("(max-width: 860px)") : { matches: false };
   const MASTER_STREAK = 3;
 
   // ---------- dom ----------
@@ -540,10 +541,10 @@
     return c.name.toLowerCase().includes(q) || c.alt.some((a) => a.toLowerCase().includes(q));
   }
 
-  function calloutCard(c) {
+  function calloutCard(c, cls = "") {
     const r = progress[state.map.id] && progress[state.map.id][c.id];
     const stat = r ? `Answered ${r.c} of ${r.s} correctly` : "Not drilled yet";
-    return `<div class="card">
+    return `<div class="card ${cls}">
       <h3>${esc(c.name)}</h3>
       ${c.alt.length ? `<p class="alt">Also called ${c.alt.map(esc).join(", ")}</p>` : ""}
       <p class="desc">${esc(c.desc)}</p>
@@ -563,7 +564,7 @@
         <label class="switch"><input type="checkbox" id="labelsToggle" ${prefs.labels ? "checked" : ""}> Show all names on the map</label>
       </div>
       <input class="search" id="search" type="search" placeholder="Search callouts" value="${esc(state.search)}" autocomplete="off" aria-label="Search callouts">
-      ${sel ? calloutCard(sel) : ""}
+      ${sel ? calloutCard(sel, "is-sticky") : ""}
       <ul class="callout-list" id="list">
         ${list.map((c) => `<li><button type="button" data-id="${c.id}" class="${c.id === state.selected ? "is-active" : ""}">
             <span class="nm">${esc(c.name)}</span>
@@ -572,6 +573,8 @@
           </button></li>`).join("") || `<li class="lede">No callout matches “${esc(state.search)}”.</li>`}
       </ul>
       ${footer()}`;
+    // On narrow screens the panel sits below the map, so echo the selection on the stage.
+    $("#stagePrompt").innerHTML = sel ? `${esc(sel.name)}<span class="sp-desc">${esc(sel.desc)}</span>` : "";
     $("#labelsToggle").onchange = (e) => { prefs.labels = e.target.checked; store.set(K.prefs, prefs); renderMarkers(); };
     const s = $("#search");
     s.oninput = () => {
@@ -594,7 +597,12 @@
     renderPanel();
     if (center) { centerOn(c, 1.8); panel.scrollTop = 0; }
     const active = panel.querySelector(".callout-list .is-active");
-    if (active && !center) active.scrollIntoView({ block: "nearest" });
+    if (active && !center && !NARROW.matches) {
+      // Keep the row clear of the sticky card when bringing it into view.
+      const card = panel.querySelector(".card.is-sticky");
+      panel.style.scrollPaddingTop = card ? `${card.offsetHeight + 28}px` : "";
+      active.scrollIntoView({ block: "nearest" });
+    }
   }
 
   // ----- Edit -----
