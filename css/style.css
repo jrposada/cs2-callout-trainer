@@ -30,6 +30,9 @@ button, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
 :focus-visible { outline: 2px solid var(--t-gold); outline-offset: 2px; }
 
+/* Read by screen readers, invisible on screen. */
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
 .app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
 
 /* Top bar: brand + map switcher */
@@ -168,12 +171,14 @@ button { cursor: pointer; }
 .vertex.is-active { fill: var(--t-gold); }
 .anchor { fill: var(--ink-deep); stroke: var(--t-gold); stroke-width: 2.5; vector-effect: non-scaling-stroke; cursor: move; }
 
+/* Dark casing drawn under each coloured feedback stroke (same idea as the label halo). */
+.fb-casing { fill: none; stroke: rgba(14, 18, 23, .9); stroke-width: 5.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; pointer-events: none; }
 .fb-target { fill: rgba(226, 164, 59, 0.32); stroke: var(--t-gold); stroke-width: 2.5; vector-effect: non-scaling-stroke; animation: glow 1.4s ease-in-out infinite alternate; }
 @keyframes glow { from { fill-opacity: .35; } to { fill-opacity: 1; } }
 .fb-answer { fill: var(--ct-blue-soft); stroke: var(--ct-blue); stroke-width: 2.5; vector-effect: non-scaling-stroke; }
 .fb-wrong { fill: rgba(224, 96, 90, .16); stroke: var(--miss); stroke-width: 2; stroke-dasharray: 5 4; vector-effect: non-scaling-stroke; }
 .fb-line { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 5 4; vector-effect: non-scaling-stroke; }
-.fb-guess { fill: var(--miss); stroke: var(--ink-deep); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.fb-guess { fill: var(--miss); stroke: var(--ink-deep); stroke-width: 2; vector-effect: non-scaling-stroke; }
 .fb-guess.hit { fill: var(--ct-blue); }
 
 /* Panel */
@@ -261,6 +266,8 @@ button { cursor: pointer; }
   letter-spacing: -0.01em;
   overflow-wrap: anywhere;
 }
+/* Focused by script at each Find step as a starting point, not a control: no ring. */
+.prompt .callname:focus { outline: none; }
 .prompt .hint { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
 .chip { display: inline-block; padding: 1px 8px; border-radius: 10px; background: var(--t-gold-soft); color: var(--t-gold); font-size: 13px; font-weight: 600; }
 
@@ -309,6 +316,9 @@ button { cursor: pointer; }
 .kbd-hint { color: var(--muted); font-size: 13px; }
 .kbd-hint kbd { padding: 0 5px; border-radius: 3px; background: var(--raised); font: 600 12px var(--body); }
 
+/* Wide screens: the step's action rows lay out as plain panel rows. */
+.step-actions { display: contents; }
+
 .foot { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12.5px; }
 .foot a { color: var(--muted); }
 
@@ -316,19 +326,26 @@ button { cursor: pointer; }
   .bar { gap: 10px; padding: 8px 10px; }
   .brand span { display: none; }
   .stage-prompt { display: block; }
-  .main { grid-template-columns: 1fr; grid-template-rows: minmax(300px, 58vh) auto; overflow-y: auto; }
+  /* The page never scrolls: the radar keeps the top of the screen and only the
+     panel scrolls, so taps on the radar or the list can't push the radar away. */
+  .main { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, 46dvh); overflow: hidden; }
   .panel { border-left: 0; border-top: 1px solid var(--line); }
-  .panel-body { overflow: visible; padding: 16px; }
-  .card.is-sticky { position: static; box-shadow: none; }
-  .app { height: auto; min-height: 100dvh; }
+  .panel-body { padding: 16px; }
+  .card.is-sticky { position: static; box-shadow: none; scroll-margin: 12px 0; }
 
-  /* During a quiz step the page doesn't scroll: the panel takes the height its
-     content needs and the radar gets the rest, so answers and Next stay in view. */
-  .quiz-step .app { height: 100vh; height: 100dvh; min-height: 0; }
-  .quiz-step .main { grid-template-rows: minmax(0, 1fr) auto; overflow: hidden; }
-  .quiz-step .panel-body { position: relative; padding: 12px 14px; gap: 10px; }
-  /* Once answered, "End round" sits on the Next row instead of its own */
-  .quiz-answered .panel-body > .row:last-child { position: absolute; right: 14px; bottom: 16px; }
+  /* During a quiz step the panel takes the height its content needs and the
+     radar gets the rest, so answers and Next stay in view. */
+  .quiz-step .main { grid-template-rows: minmax(140px, 1fr) minmax(0, auto); }
+  .quiz-step .panel-body { padding: 12px 14px; gap: 10px; }
+  /* Next and End round share one bar, stuck to the panel's foot if the step ever overflows
+     (short landscape screens), so the main action never needs a scroll. */
+  .quiz-step .step-actions {
+    display: flex; align-items: center; gap: 8px;
+    position: sticky; bottom: -12px; z-index: 1;
+    margin: 0 -14px -12px; padding: 0 14px 12px;
+    background: var(--panel);
+  }
+  .quiz-step .step-actions > .row:last-child { margin-left: auto; }
   .quiz-step .prompt { padding: 0; }
   .quiz-step .prompt .ask { font-size: 14px; }
   .quiz-step .prompt .callname { font-size: 30px; }

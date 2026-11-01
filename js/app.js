@@ -153,6 +153,21 @@
     return best;
   }
 
+  // Screen-reader status: #sr-status lives outside the re-rendered panel, so nothing cuts it off.
+  // Clearing first lets the same sentence be announced twice in a row.
+  let srTimer;
+  function announce(msg) {
+    const n = $("#sr-status");
+    clearTimeout(srTimer);
+    n.textContent = "";
+    srTimer = setTimeout(() => { n.textContent = msg; }, 60);
+  }
+  let searchTimer;
+  function announceMatches(n) {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => announce(n ? `${n} callout${n === 1 ? "" : "s"} match` : "No callout matches"), 600);
+  }
+
   let toastTimer;
   function toast(msg, ms = 1800) {
     const t = $("#toast");
@@ -480,7 +495,27 @@
     });
   }
   function fbCircle(cls, p, r) { return el("circle", { class: cls, cx: p.x, cy: p.y, "data-r": r }, layerFb); }
-  function fbPoly(cls, c) { return el("polygon", { class: cls, points: ptsStr(c) }, layerFb); }
+  // Every feedback shape sits on a dark casing, so its colour reads on light and dark floors alike.
+  function fbPoly(cls, c) {
+    el("polygon", { class: "fb-casing", points: ptsStr(c) }, layerFb);
+    return el("polygon", { class: cls, points: ptsStr(c) }, layerFb);
+  }
+  function fbLine(a, b) {
+    const pts = { x1: a.x, y1: a.y, x2: b.x, y2: b.y };
+    el("line", { class: "fb-casing", ...pts }, layerFb);
+    return el("line", { class: "fb-line", ...pts }, layerFb);
+  }
+  // Name it: zoom in until a small target is about TARGET_PX on screen (but never so far that it overflows).
+  const TARGET_PX = 60;
+  function showTarget(c) {
+    const pts = ptsOf(c), r = svg.getBoundingClientRect(), u = unit();
+    const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+    const bw = Math.max(...xs) - Math.min(...xs), bh = Math.max(...ys) - Math.min(...ys);
+    const want = r.width && r.height ? Math.max(Math.min(bw, bh) / TARGET_PX, bw / (0.7 * r.width), bh / (0.7 * r.height)) : u;
+    if (want >= u) return ensureVisible(zoneCenter(c));
+    const p = zoneCenter(c), k = want / u, [, , w, h] = state.view;
+    setView([p.x - (w * k) / 2, p.y - (h * k) / 2, w * k, h * k]);
+  }
   // Centre of a zone's bounding box, for keeping it in view.
   function zoneCenter(c) {
     const pts = ptsOf(c);
@@ -651,6 +686,7 @@
       state.search = s.value;
       const pos = s.selectionStart;
       renderExplore();
+      announceMatches(panel.querySelectorAll("#list button[data-id]").length);
       renderMarkers();
       const s2 = $("#search"); s2.focus(); s2.setSelectionRange(pos, pos);
     };
@@ -660,16 +696,26 @@
         if (!list.length) return;
         selectCallout(list[0].id, true);
         const s2 = $("#search"); s2.focus(); s2.setSelectionRange(s2.value.length, s2.value.length);
-      } else if (e.key === "Escape" && s.value) {
+      } else if (e.key === "Escape") {
+        if (!escapeStep()) return;
         e.preventDefault();
-        s.value = "";
-        s.oninput();
+        const s2 = $("#search"); if (s2) s2.focus();
       } else if (e.key === "ArrowDown") {
         const b = $("#list button[data-id]");
         if (b) { e.preventDefault(); b.focus(); }
       }
     };
     $("#list").onclick = (e) => { const b = e.target.closest("button[data-id]"); if (b) selectCallout(b.dataset.id, true); };
+  }
+
+  // Escape undoes one thing at a time: the Edit point, then the search, then the selection.
+  function escapeStep() {
+    if (state.mode === "edit" && state.vertex != null) { state.vertex = null; renderHandles(); renderPanel(); return true; }
+    if (state.mode === "explore" && state.search) { state.search = ""; renderMarkers(); renderPanel(); return true; }
+    if ((state.mode === "explore" || state.mode === "edit") && state.selected) {
+      state.selected = null; state.vertex = null; renderMarkers(); renderPanel(); return true;
+    }
+    return false;
   }
 
   function selectCallout(id, center) {
@@ -682,7 +728,10 @@
     renderPanel();
     if (center) { centerOn(c, 1.8); panel.scrollTop = 0; }
     const active = panel.querySelector(".callout-list .is-active");
-    if (active && !center && !NARROW.matches) {
+    // Narrow screens have no room for a sticky card, so a radar tap brings the card itself into view.
+    const card = !center && NARROW.matches && panel.querySelector(".card");
+    if (card) card.scrollIntoView({ block: "nearest" });
+    else if (active && !center && !NARROW.matches) {
       // Keep the row clear of the sticky card when bringing it into view.
       const card = panel.querySelector(".card.is-sticky");
       panel.style.scrollPaddingTop = card ? `${card.offsetHeight + 28}px` : "";
@@ -873,6 +922,7 @@
       prefs.round = Number(b.dataset.n); store.set(K.prefs, prefs); renderQuizSetup();
     };
     $("#start").onclick = () => startRound();
+    $("#start").focus({ preventScroll: true });
   }
 
   function startRound(onlyIds) {
@@ -899,9 +949,13 @@
     renderPanel(); // first, so the stage has its final size before fitting the zone
     if (state.mode === "name") {
       fbPoly("fb-target", c);
-      ensureVisible(zoneCenter(c));
+      showTarget(c);
       rescaleMarks();
     }
+    announce(`Question ${q.i + 1} of ${q.items.length}.${state.mode === "find" ? ` Where is ${c.name}?` : ""}`);
+    // Keyboard users start each question where they answer it: the first name, or the Find target.
+    const f = panel.querySelector(state.mode === "name" ? ".choice" : ".callname");
+    if (f) f.focus({ preventScroll: true });
   }
 
   function buildOptions(c) {
@@ -916,7 +970,7 @@
 
   function progressBar() {
     const q = state.quiz;
-    return `<div class="progress" aria-label="Question ${q.i + 1} of ${q.items.length}">${q.items.map((_, i) => {
+    return `<div class="progress" aria-hidden="true">${q.items.map((_, i) => {
       const r = q.results[i];
       return `<span class="${r ? r.kind : i === q.i ? "now" : ""}"></span>`;
     }).join("")}</div>`;
@@ -930,14 +984,22 @@
       ${progressBar()}
       <div class="prompt">
         <p class="ask">Question ${q.i + 1} of ${q.items.length}. Where is</p>
-        <h2 class="callname">${esc(c.name)}</h2>
+        <h2 class="callname" tabindex="-1">${esc(c.name)}</h2>
         ${c.alt.length ? `<p class="hint">Also called ${c.alt.map(esc).join(", ")}</p>` : ""}
         ${levelChip}
       </div>
       ${r ? resultBlock(r, c) : `<p class="kbd-hint">${TOUCH ? "Tap the radar. Drag to pan, pinch to zoom." : "Click the radar. Drag to pan, scroll to zoom."}</p>`}
-      ${r ? `<div class="row"><button type="button" class="btn primary" id="next">${q.i + 1 < q.items.length ? "Next callout" : "See results"}</button>${enterHint()}</div>` : ""}
-      <div class="row"><span class="spacer"></span><button type="button" class="btn quiet small" id="quit">End round</button></div>`;
+      ${stepActions(r, "Next callout")}`;
     bindStepButtons();
+  }
+
+  // Next (once answered) and End round. On narrow screens the wrapper is a bar stuck to the panel's foot.
+  function stepActions(r, nextLabel) {
+    const q = state.quiz;
+    return `<div class="step-actions">
+      ${r ? `<div class="row"><button type="button" class="btn primary" id="next">${q.i + 1 < q.items.length ? nextLabel : "See results"}</button>${enterHint()}</div>` : ""}
+      <div class="row"><span class="spacer"></span><button type="button" class="btn quiet small" id="quit">End round</button></div>
+    </div>`;
   }
 
   // Keyboard hint next to Next; touch screens have no Enter key to point at.
@@ -991,11 +1053,14 @@
     q.results[q.i] = { kind, d: kind === "hit" ? 0 : edge.d, near, alias, id: c.id };
     // Zone edges are hand-placed and approximate, so "close" counts as correct.
     score(state.map.id, c.id, kind !== "miss");
+    const clicked = near && near.id !== c.id ? ` You clicked ${near.name}.` : "";
+    announce(kind === "hit" ? `Right spot.${alias ? clicked : ""}`
+      : `${kind === "close" ? "Close" : "Missed"}, ${meters(edge.d)} metre${meters(edge.d) === 1 ? "" : "s"} outside ${c.name}.${clicked}`);
     // feedback on the radar: the zone you clicked (if it wasn't a hit), then the answer on top
     const wrong = kind !== "hit" && near && near.id !== c.id ? near : null;
     if (wrong) fbPoly("fb-wrong", wrong);
     fbPoly("fb-answer", c);
-    if (kind !== "hit") el("line", { class: "fb-line", x1: p.x, y1: p.y, x2: edge.x, y2: edge.y }, layerFb);
+    if (kind !== "hit") fbLine(p, edge);
     fbCircle("fb-guess" + (kind !== "miss" ? " hit" : ""), p, 5);
     // After the dot so it stays readable; nudged away from the answer's name so neighbours don't collide.
     if (wrong) fbLabel(wrong, wrong.name, 0, wrong.y <= c.y ? -12 : 21);
@@ -1023,8 +1088,7 @@
         }).join("")}
       </div>
       ${r ? resultBlock(r, c) : `<p class="kbd-hint">${TOUCH ? "Tap a name." : "Press <kbd>1</kbd> to <kbd>4</kbd> to answer."}</p>`}
-      ${r ? `<div class="row"><button type="button" class="btn primary" id="next">${q.i + 1 < q.items.length ? "Next zone" : "See results"}</button>${enterHint()}</div>` : ""}
-      <div class="row"><span class="spacer"></span><button type="button" class="btn quiet small" id="quit">End round</button></div>`;
+      ${stepActions(r, "Next zone")}`;
     $("#choices").onclick = (e) => { const b = e.target.closest("button[data-id]"); if (b) answerName(b.dataset.id); };
     bindStepButtons();
   }
@@ -1038,6 +1102,7 @@
     q.choice = id;
     q.results[q.i] = { kind: ok ? "hit" : "miss", id: c.id, pick: id };
     score(state.map.id, c.id, ok);
+    announce(ok ? "Correct." : `Wrong. That zone is ${c.name}.`);
     clearFeedback();
     if (!ok) {
       const wrong = state.map.callouts.find((o) => o.id === id);
@@ -1080,6 +1145,7 @@
     const total = q.results.length;
     const hits = q.results.filter((r) => r.kind !== "miss").length;
     const missed = q.results.filter((r) => r.kind === "miss").map((r) => state.map.callouts.find((c) => c.id === r.id));
+    if (!q.told) { q.told = true; announce(`Round over, ${hits} of ${total}.`); }
     panel.innerHTML = `
       ${progressBar()}
       <div>
@@ -1095,11 +1161,13 @@
     const rm = $("#retryMissed");
     if (rm) rm.onclick = () => startRound(missed.map((c) => c.id));
     $("#again").onclick = () => startRound();
+    (rm || $("#again")).focus();
   }
 
   // ---------- keyboard ----------
   document.addEventListener("keydown", (e) => {
     if (e.target.matches("input, textarea")) return;
+    if (e.key === "Escape") { if (escapeStep()) e.preventDefault(); return; }
     const q = state.quiz;
     if (q && !q.done) {
       if ((e.key === "Enter" || e.key === " ") && q.answered && !e.target.matches("button")) { e.preventDefault(); nextStep(); return; }
