@@ -69,7 +69,6 @@ button { cursor: pointer; }
 .radar { width: 100%; height: 100%; display: block; touch-action: none; user-select: none; -webkit-user-select: none; }
 .radar.is-panning { cursor: grabbing; }
 .mode-find .radar { cursor: crosshair; }
-.mode-edit .radar .marker { cursor: grab; }
 
 .stage-tools {
   position: absolute; left: 14px; right: 14px; bottom: 14px;
@@ -106,28 +105,39 @@ button { cursor: pointer; }
 }
 .toast.show { opacity: 1; }
 
-/* SVG marks */
-.marker circle.dot { fill: var(--t-gold); stroke: var(--ink-deep); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
-.marker circle.hit { fill: transparent; }
-.marker.other-level circle.dot { fill: var(--muted); opacity: .45; }
-.marker.is-active circle.dot { fill: var(--text); }
-.marker.is-dim { opacity: .25; }
-.marker text, .fb-label {
+/* SVG: zones, names, edit handles, quiz feedback */
+.zone { stroke-width: 1; vector-effect: non-scaling-stroke; stroke-linejoin: round; transition: fill .12s; }
+.zone-area { fill: rgba(115, 149, 209, 0.07); stroke: rgba(231, 234, 238, 0.30); }
+.zone-spot { fill: rgba(226, 164, 59, 0.10); stroke: rgba(226, 164, 59, 0.60); }
+.zone.is-hover { fill: rgba(231, 234, 238, 0.20); stroke: rgba(231, 234, 238, 0.85); }
+.zone.is-active { fill: rgba(226, 164, 59, 0.30); stroke: var(--t-gold); stroke-width: 2; }
+.zone.is-dim { opacity: .18; }
+.mode-explore .radar, .mode-edit .radar { cursor: pointer; }
+
+.label, .fb-label {
   font: 600 13px var(--display);
   fill: var(--text);
+  text-anchor: middle;
   paint-order: stroke; stroke: rgba(14, 18, 23, .92); stroke-width: 3.5px; stroke-linejoin: round;
   pointer-events: none;
 }
-.marker text { display: none; }
-.show-labels .marker text, .marker.is-active text { display: block; }
-.target-ring { fill: none; stroke: var(--t-gold); stroke-width: 2.5; vector-effect: non-scaling-stroke; }
-.target-pulse { fill: none; stroke: var(--t-gold); stroke-width: 2; vector-effect: non-scaling-stroke; animation: pulse 1.4s ease-out infinite; transform-box: fill-box; transform-origin: center; }
-@keyframes pulse { from { transform: scale(.6); opacity: 1; } to { transform: scale(2.2); opacity: 0; } }
+.label { display: none; }
+.label-area { fill: #f3d9a6; }
+.show-labels .label, .label.is-hover, .label.is-active { display: block; }
+.label.is-dim { display: none; }
+.label.is-active { fill: var(--t-gold); }
+
+.vertex { fill: var(--text); stroke: var(--ink-deep); stroke-width: 1.5; vector-effect: non-scaling-stroke; cursor: grab; }
+.vertex.is-active { fill: var(--t-gold); }
+.anchor { fill: var(--ink-deep); stroke: var(--t-gold); stroke-width: 2.5; vector-effect: non-scaling-stroke; cursor: move; }
+
+.fb-target { fill: rgba(226, 164, 59, 0.32); stroke: var(--t-gold); stroke-width: 2.5; vector-effect: non-scaling-stroke; animation: glow 1.4s ease-in-out infinite alternate; }
+@keyframes glow { from { fill-opacity: .35; } to { fill-opacity: 1; } }
+.fb-answer { fill: var(--ct-blue-soft); stroke: var(--ct-blue); stroke-width: 2.5; vector-effect: non-scaling-stroke; }
+.fb-wrong { fill: rgba(224, 96, 90, .16); stroke: var(--miss); stroke-width: 2; stroke-dasharray: 5 4; vector-effect: non-scaling-stroke; }
 .fb-line { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 5 4; vector-effect: non-scaling-stroke; }
 .fb-guess { fill: var(--miss); stroke: var(--ink-deep); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .fb-guess.hit { fill: var(--ct-blue); }
-.fb-true { fill: none; stroke: var(--ct-blue); stroke-width: 2.5; vector-effect: non-scaling-stroke; }
-.fb-zone { fill: var(--ct-blue-soft); stroke: none; }
 
 /* Panel */
 .panel { display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--line); background: var(--panel); }
@@ -259,7 +269,8 @@ button { cursor: pointer; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .target-pulse { animation: none; opacity: .6; }
+  .fb-target { animation: none; }
+  .zone { transition: none; }
   .stage-prompt {
   display: none;
   position: absolute; top: 10px; left: 10px; right: 10px;
