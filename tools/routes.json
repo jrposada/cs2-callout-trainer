@@ -1,7 +1,7 @@
 {
   "_about": "Spawns and early-round targets for tools/make_routes.py. Targets are callout ids from data/maps.js; a target can be {\"to\": id, \"via\": [[x, y], [x, y, \"lower\"]]} to force waypoints (a third value switches level there). \"mask\": {level: {\"open\": [[x0, y0, x1, y1]], \"block\": [...]}} patches the walkable floor taken from the radar.",
   "mirage": {
-    "spawns": {"T": {"x": 901, "y": 430}, "CT": {"x": 294, "y": 721}},
+    "spawns": {"T": {"x": 900, "y": 368}, "CT": {"x": 294, "y": 721}},
     "targets": {
       "T": ["top-mid", "mid", "catwalk", "a-ramp", "palace", "b-apartments", "underpass"],
       "CT": ["sniper-s-nest", "jungle", "connector", "stairs", "ticket-booth", "market", "b-short", "b-site"]
@@ -22,10 +22,10 @@
     }
   },
   "nuke": {
-    "spawns": {"T": {"x": 173, "y": 556}, "CT": {"x": 849, "y": 471}},
+    "spawns": {"T": {"x": 207, "y": 567}, "CT": {"x": 849, "y": 471}},
     "mask": {"upper": {"wall_contrast": 35}},
     "targets": {
-      "T": ["lobby", "outside", "silo", "t-red", "ramp", "squeaky", "hut", "radio",
+      "T": ["lobby", {"to": "outside", "via": [[520, 712]]}, "silo", "t-red", "ramp", "squeaky", "hut", "radio",
             {"to": "bottom-ramp", "via": [[484, 625], [500, 642, "lower"]]}],
       "CT": ["outside", "garage", "ct-red", "heaven", "hut", "squeaky", "main"]
     }
