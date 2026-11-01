@@ -497,6 +497,7 @@
     if (state.hover === id) return;
     for (const n of svg.querySelectorAll(".is-hover")) n.classList.remove("is-hover");
     state.hover = id;
+    scheduleDeclutter();
     if (!id) return;
     for (const n of svg.querySelectorAll(`[data-id="${CSS.escape(id)}"]`)) n.classList.add("is-hover");
   }
@@ -523,6 +524,61 @@
       t.setAttribute("dx", t.dataset.dx * u);
       t.setAttribute("dy", t.dataset.dy * u);
     });
+    scheduleDeclutter();
+  }
+
+  // ---------- label declutter ----------
+  // Labels are a constant size on screen, so with all names on they collide. A greedy pass shows the
+  // most important labels first and hides (never removes) any label that would overlap one already shown.
+  // Order: quiz feedback labels (the last drawn first), selected, hovered, then areas and spots by zone size.
+  const LABEL_PAD = 2;           // screen px of air kept between labels
+  const labelBoxes = new Map();  // "size|text" -> {w, a, d} in screen px, measured once per label size
+  let measureCtx = null, declutterFrame = 0;
+  function labelBox(text, size) {
+    const key = size + "|" + text;
+    let b = labelBoxes.get(key);
+    if (!b) {
+      if (!measureCtx) measureCtx = document.createElement("canvas").getContext("2d");
+      const ff = getComputedStyle(document.documentElement).getPropertyValue("--display") || "sans-serif";
+      measureCtx.font = `600 ${size}px ${ff}`;
+      const m = measureCtx.measureText(text);
+      b = { w: m.width, a: m.fontBoundingBoxAscent || size * 0.95, d: m.fontBoundingBoxDescent || size * 0.3 };
+      labelBoxes.set(key, b);
+    }
+    return b;
+  }
+  // Web fonts can arrive after the first measurement.
+  if (document.fonts) document.fonts.addEventListener("loadingdone", () => { labelBoxes.clear(); scheduleDeclutter(); });
+  function scheduleDeclutter() {
+    if (declutterFrame) return;
+    declutterFrame = requestAnimationFrame(() => { declutterFrame = 0; declutter(); });
+  }
+  function declutter() {
+    if (!state.map) return;
+    const u = unit();
+    const showAll = svg.classList.contains("show-labels");
+    const size = new Map(levelCallouts().map((c) => [c.id, polyArea(ptsOf(c))]));
+    const items = [];
+    const fb = layerFb.querySelectorAll("text");
+    fb.forEach((t, i) => items.push({ t, rank: 0, key: i, size: 16 }));
+    layerMarkers.querySelectorAll("text").forEach((t) => {
+      const cl = t.classList;
+      if (cl.contains("is-dim") || !(showAll || cl.contains("is-hover") || cl.contains("is-active"))) { cl.remove("is-hidden"); return; }
+      const rank = cl.contains("is-active") ? 1 : cl.contains("is-hover") ? 2 : cl.contains("label-area") ? 3 : 4;
+      items.push({ t, rank, key: -(size.get(t.dataset.id) || 0), size: cl.contains("label-area") ? 14.5 : 13 });
+    });
+    // Feedback labels drawn later (the answer, the focused zone) win over earlier ones.
+    items.sort((a, b) => a.rank - b.rank || (a.rank === 0 ? b.key - a.key : a.key - b.key));
+    const placed = [];
+    for (const it of items) {
+      const t = it.t, b = labelBox(t.textContent, it.size);
+      const dx = Number(t.dataset.dx || 0), dy = t.dataset.dy != null ? Number(t.dataset.dy) : 4.5;
+      const x = Number(t.getAttribute("x")) / u + dx, y = Number(t.getAttribute("y")) / u + dy;
+      const r = { l: x - b.w / 2 - LABEL_PAD, r: x + b.w / 2 + LABEL_PAD, t: y - b.a - LABEL_PAD, b: y + b.d + LABEL_PAD };
+      const hit = placed.some((p) => r.l < p.r && p.l < r.r && r.t < p.b && p.t < r.b);
+      t.classList.toggle("is-hidden", hit);
+      if (!hit) placed.push(r);
+    }
   }
   function fbCircle(cls, p, r) { return el("circle", { class: cls, cx: p.x, cy: p.y, "data-r": r }, layerFb); }
   // Every feedback shape sits on a dark casing, so its colour reads on light and dark floors alike.
