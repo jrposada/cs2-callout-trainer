@@ -480,7 +480,27 @@
     });
   }
   function fbCircle(cls, p, r) { return el("circle", { class: cls, cx: p.x, cy: p.y, "data-r": r }, layerFb); }
-  function fbPoly(cls, c) { return el("polygon", { class: cls, points: ptsStr(c) }, layerFb); }
+  // Every feedback shape sits on a dark casing, so its colour reads on light and dark floors alike.
+  function fbPoly(cls, c) {
+    el("polygon", { class: "fb-casing", points: ptsStr(c) }, layerFb);
+    return el("polygon", { class: cls, points: ptsStr(c) }, layerFb);
+  }
+  function fbLine(a, b) {
+    const pts = { x1: a.x, y1: a.y, x2: b.x, y2: b.y };
+    el("line", { class: "fb-casing", ...pts }, layerFb);
+    return el("line", { class: "fb-line", ...pts }, layerFb);
+  }
+  // Name it: zoom in until a small target is about TARGET_PX on screen (but never so far that it overflows).
+  const TARGET_PX = 60;
+  function showTarget(c) {
+    const pts = ptsOf(c), r = svg.getBoundingClientRect(), u = unit();
+    const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+    const bw = Math.max(...xs) - Math.min(...xs), bh = Math.max(...ys) - Math.min(...ys);
+    const want = r.width && r.height ? Math.max(Math.min(bw, bh) / TARGET_PX, bw / (0.7 * r.width), bh / (0.7 * r.height)) : u;
+    if (want >= u) return ensureVisible(zoneCenter(c));
+    const p = zoneCenter(c), k = want / u, [, , w, h] = state.view;
+    setView([p.x - (w * k) / 2, p.y - (h * k) / 2, w * k, h * k]);
+  }
   // Centre of a zone's bounding box, for keeping it in view.
   function zoneCenter(c) {
     const pts = ptsOf(c);
@@ -902,7 +922,7 @@
     renderPanel(); // first, so the stage has its final size before fitting the zone
     if (state.mode === "name") {
       fbPoly("fb-target", c);
-      ensureVisible(zoneCenter(c));
+      showTarget(c);
       rescaleMarks();
     }
   }
@@ -1006,7 +1026,7 @@
     const wrong = kind !== "hit" && near && near.id !== c.id ? near : null;
     if (wrong) fbPoly("fb-wrong", wrong);
     fbPoly("fb-answer", c);
-    if (kind !== "hit") el("line", { class: "fb-line", x1: p.x, y1: p.y, x2: edge.x, y2: edge.y }, layerFb);
+    if (kind !== "hit") fbLine(p, edge);
     fbCircle("fb-guess" + (kind !== "miss" ? " hit" : ""), p, 5);
     // After the dot so it stays readable; nudged away from the answer's name so neighbours don't collide.
     if (wrong) fbLabel(wrong, wrong.name, 0, wrong.y <= c.y ? -12 : 21);

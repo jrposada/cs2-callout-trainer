@@ -168,12 +168,14 @@ button { cursor: pointer; }
 .vertex.is-active { fill: var(--t-gold); }
 .anchor { fill: var(--ink-deep); stroke: var(--t-gold); stroke-width: 2.5; vector-effect: non-scaling-stroke; cursor: move; }
 
+/* Dark casing drawn under each coloured feedback stroke (same idea as the label halo). */
+.fb-casing { fill: none; stroke: rgba(14, 18, 23, .9); stroke-width: 5.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; pointer-events: none; }
 .fb-target { fill: rgba(226, 164, 59, 0.32); stroke: var(--t-gold); stroke-width: 2.5; vector-effect: non-scaling-stroke; animation: glow 1.4s ease-in-out infinite alternate; }
 @keyframes glow { from { fill-opacity: .35; } to { fill-opacity: 1; } }
 .fb-answer { fill: var(--ct-blue-soft); stroke: var(--ct-blue); stroke-width: 2.5; vector-effect: non-scaling-stroke; }
 .fb-wrong { fill: rgba(224, 96, 90, .16); stroke: var(--miss); stroke-width: 2; stroke-dasharray: 5 4; vector-effect: non-scaling-stroke; }
 .fb-line { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 5 4; vector-effect: non-scaling-stroke; }
-.fb-guess { fill: var(--miss); stroke: var(--ink-deep); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.fb-guess { fill: var(--miss); stroke: var(--ink-deep); stroke-width: 2; vector-effect: non-scaling-stroke; }
 .fb-guess.hit { fill: var(--ct-blue); }
 
 /* Panel */
