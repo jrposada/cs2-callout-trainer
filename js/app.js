@@ -906,6 +906,7 @@
       prefs.round = Number(b.dataset.n); store.set(K.prefs, prefs); renderQuizSetup();
     };
     $("#start").onclick = () => startRound();
+    $("#start").focus({ preventScroll: true });
   }
 
   function startRound(onlyIds) {
@@ -935,6 +936,9 @@
       showTarget(c);
       rescaleMarks();
     }
+    // Keyboard users start each question where they answer it: the first name, or the Find target.
+    const f = panel.querySelector(state.mode === "name" ? ".choice" : ".callname");
+    if (f) f.focus({ preventScroll: true });
   }
 
   function buildOptions(c) {
@@ -963,7 +967,7 @@
       ${progressBar()}
       <div class="prompt">
         <p class="ask">Question ${q.i + 1} of ${q.items.length}. Where is</p>
-        <h2 class="callname">${esc(c.name)}</h2>
+        <h2 class="callname" tabindex="-1">${esc(c.name)}</h2>
         ${c.alt.length ? `<p class="hint">Also called ${c.alt.map(esc).join(", ")}</p>` : ""}
         ${levelChip}
       </div>
@@ -1135,6 +1139,7 @@
     const rm = $("#retryMissed");
     if (rm) rm.onclick = () => startRound(missed.map((c) => c.id));
     $("#again").onclick = () => startRound();
+    (rm || $("#again")).focus();
   }
 
   // ---------- keyboard ----------
