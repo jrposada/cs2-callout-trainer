@@ -36,6 +36,8 @@
   // ---------- constants ----------
   const CLOSE_PX = 24;     // radar px outside a zone that still counts as "close"
   const INCH_TO_M = 0.0254; // 1 Hammer unit ~ 1 inch
+  const ANCHOR_PX = 14;     // screen px between a label and its name handle (Edit)
+  const UNDO_KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘Z" : "Ctrl+Z";
   const TOUCH = window.matchMedia && matchMedia("(pointer: coarse)").matches;
   const NARROW = window.matchMedia ? matchMedia("(max-width: 860px)") : { matches: false };
   const MASTER_STREAK = 3;
@@ -311,6 +313,8 @@
           renderHandles();
         } else {
           gesture.type = "anchor";
+          // Keep the grab offset, since the handle is drawn above the label point.
+          gesture.off = { x: c.x - gesture.p0.x, y: c.y - gesture.p0.y };
         }
         gesture.moved = false;
       } else if (sel && sel.level === state.level && (calloutAt(gesture.p0) || {}).id === sel.id) {
@@ -372,7 +376,10 @@
         const dx = Math.round(p.x - gesture.p0.x), dy = Math.round(p.y - gesture.p0.y);
         c.poly = gesture.orig.map((v, k) => v + (k % 2 ? dy : dx));
         c.x = gesture.xy.x + dx; c.y = gesture.xy.y + dy;
-      } else { c.x = x; c.y = y; }
+      } else {
+        c.x = Math.round(Math.max(0, Math.min(1024, p.x + gesture.off.x)));
+        c.y = Math.round(Math.max(0, Math.min(1024, p.y + gesture.off.y)));
+      }
       updateZoneDom(c);
     }
   });
@@ -461,7 +468,8 @@
     ptsOf(c).forEach((p, i) => {
       el("circle", { class: "vertex" + (i === state.vertex ? " is-active" : ""), cx: p.x, cy: p.y, "data-i": i, "data-r": i === state.vertex ? 6.5 : 5 }, layerEdit);
     });
-    el("circle", { class: "anchor", cx: c.x, cy: c.y, "data-r": 7 }, layerEdit);
+    // The name handle sits a fixed ANCHOR_PX above the label, so a drag on the label (or the middle of a small zone) moves the zone.
+    el("circle", { class: "anchor", cx: c.x, cy: c.y, "data-y": c.y, "data-oy": -ANCHOR_PX, "data-r": 7 }, layerEdit);
     rescaleMarks();
   }
   function setHover(id) {
@@ -486,6 +494,7 @@
       t.setAttribute("dy", 4.5 * u);
     });
     layerEdit.querySelectorAll("[data-r]").forEach((n) => n.setAttribute("r", Number(n.dataset.r) * u));
+    layerEdit.querySelectorAll("[data-oy]").forEach((n) => n.setAttribute("cy", Number(n.dataset.y) + Number(n.dataset.oy) * u));
     layerFb.querySelectorAll("[data-r]").forEach((n) => n.setAttribute("r", Number(n.dataset.r) * u));
     layerFb.querySelectorAll("text").forEach((t) => {
       t.setAttribute("font-size", 16 * u);
@@ -631,11 +640,21 @@
     document.body.classList.toggle("quiz-step", step);
     document.body.classList.toggle("quiz-answered", step && q.answered);
     syncLevelButtons();
+    syncEditBadge();
     $("#stagePrompt").textContent = "";
     $("#stagePrompt").classList.remove("is-find");
     if (state.mode === "explore") return renderExplore();
     if (state.mode === "edit") return renderEdit();
     return renderQuiz();
+  }
+
+  // Local edits change quiz answers, so the Edit tab shows how many the current map has.
+  function editCount(m) { return edits[m.id] ? Object.keys(edits[m.id]).length : 0; }
+  function syncEditBadge() {
+    const b = $(".modes button[data-mode='edit']"), n = editCount(state.map);
+    b.textContent = n ? `Edit · ${n}` : "Edit";
+    if (n) b.setAttribute("aria-label", `Edit, ${n} local zone edit${n === 1 ? "" : "s"} on ${state.map.name}`);
+    else b.removeAttribute("aria-label");
   }
 
   function footer() {
@@ -743,7 +762,7 @@
   function renderEdit() {
     const m = state.map;
     const sel = selectedCallout();
-    const n = edits[m.id] ? Object.keys(edits[m.id]).length : 0;
+    const n = editCount(m);
     const npts = sel ? ptsOf(sel).length : 0;
     panel.innerHTML = `
       <p class="lede">Click a zone to select it. Drag inside it to move it, drag a corner to resize it, and drag the round handle to move its name. Zones don't need to cover the whole map. Changes save in this browser and are used by the quizzes straight away. Export them to update the site for everyone.</p>
@@ -760,6 +779,8 @@
         : `<div class="card"><p class="desc" style="margin:0">Pick a zone on the map to select it.</p></div>`}
       <div class="row">
         <span class="field-label">${n ? `${n} changed on ${esc(m.name)}` : `No changes on ${esc(m.name)} yet`}</span>
+        <span class="spacer"></span>
+        <button type="button" class="btn small" id="undoEdit" title="Undo the last edit (${UNDO_KEY})" ${canUndo() ? "" : "disabled"}>Undo</button>
       </div>
       <div class="row">
         <button type="button" class="btn primary" id="copyJson">Copy map data</button>
@@ -794,7 +815,13 @@
       };
     }
     const u = $("#undoOne");
-    if (u) u.onclick = () => { delete edits[m.id][sel.id]; state.vertex = null; saveEdits(); };
+    if (u) u.onclick = () => { pushUndo("reset of " + sel.name, sel.id); delete edits[m.id][sel.id]; state.vertex = null; saveEdits(); };
+    $("#undoEdit").onclick = () => {
+      undoEdit();
+      // The panel re-renders, so keep keyboard focus on Undo while there is more to undo.
+      const b = $("#undoEdit");
+      if (b && !b.disabled) b.focus({ preventScroll: true });
+    };
     $("#copyJson").onclick = async () => {
       try { await navigator.clipboard.writeText(exportJson()); toast("Map data copied"); }
       catch { const f = downloadJson(true); toast(`Couldn't copy to the clipboard, downloaded ${f} instead.`, 4000); }
@@ -802,7 +829,8 @@
     $("#dlJson").onclick = () => downloadJson();
     $("#resetEdits").onclick = () => {
       if (!confirm(`Discard ${n} changed zone${n === 1 ? "" : "s"} on ${m.name}?`)) return;
-      delete edits[m.id]; state.vertex = null; saveEdits(); toast("Changes discarded");
+      pushUndo(`discard of ${n} change${n === 1 ? "" : "s"}`);
+      delete edits[m.id]; state.vertex = null; saveEdits(); toast(`Changes discarded. Press ${UNDO_KEY} to undo.`, 3000);
     };
   }
   // Same layout as data/maps.js, so the export can be pasted straight in.
@@ -855,8 +883,30 @@
     if (!quiet) toast("Downloaded " + a.download);
     return a.download;
   }
+  // Step undo for Edit: one stack per map of earlier snapshots of that map's edits, kept for the session.
+  const UNDO_MAX = 50;
+  const undoStacks = {};
+  function pushUndo(what, id) {
+    const mid = state.map.id, st = undoStacks[mid] || (undoStacks[mid] = []);
+    st.push({ what, id, prev: edits[mid] ? JSON.parse(JSON.stringify(edits[mid])) : null });
+    if (st.length > UNDO_MAX) st.shift();
+  }
+  function canUndo() { return !!(undoStacks[state.map.id] || []).length; }
+  function undoEdit() {
+    const st = undoStacks[state.map.id];
+    const u = st && st.pop();
+    if (!u) return false;
+    if (u.prev) edits[state.map.id] = u.prev; else delete edits[state.map.id];
+    state.vertex = null;
+    const c = u.id && state.map.callouts.find((x) => x.id === u.id);
+    if (c) { state.selected = c.id; if (c.level !== state.level) setLevel(c.level); }
+    saveEdits();
+    announce("Undid " + u.what);
+    return true;
+  }
   function commitEdit(c) {
     if (!c) return;
+    pushUndo("change to " + c.name, c.id);
     edits[state.map.id] = edits[state.map.id] || {};
     const e = { x: c.x, y: c.y };
     if (c.poly) e.poly = c.poly.slice();
@@ -893,11 +943,13 @@
     const n = mapCounts(m);
     const isFind = state.mode === "find";
     const sizes = [10, 20, 0];
+    const ne = editCount(m);
     panel.innerHTML = `
       <p class="lede">${isFind
         ? `You get a callout name. <strong>Click anywhere inside its zone</strong> on the radar.`
         : `A zone lights up on the radar. <strong>Pick its name</strong> from four nearby callouts.`}
         Callouts you keep missing come up more often.</p>
+      ${ne ? `<p class="lede">Using your ${ne} local zone edit${ne === 1 ? "" : "s"} on ${esc(m.name)}.</p>` : ""}
       <div class="row"><span class="field-label">Questions</span>
         <div class="seg" id="roundSize">${sizes.map((s) => `<button type="button" data-n="${s}" aria-pressed="${prefs.round === s}">${s || "All " + m.callouts.length}</button>`).join("")}</div>
       </div>
@@ -1176,6 +1228,11 @@
         if (o) answerName(o.id);
         return;
       }
+    }
+    if (state.mode === "edit" && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "z") {
+      e.preventDefault();
+      if (!undoEdit()) announce("Nothing to undo");
+      return;
     }
     if (state.mode === "edit" && (e.key === "Delete" || e.key === "Backspace") && state.vertex != null) {
       // Same rule as the Delete point button: never on rectangles or below three points.
