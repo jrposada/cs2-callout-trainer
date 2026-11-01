@@ -8,7 +8,7 @@ Cobblestone is not included because it is not in CS2, so there is no CS2 radar f
 ## Modes
 
 - **Explore** – every callout is a zone on the radar. Hover or tap a zone, or search the list, to see its name, other names and what it is. Toggle all names on or off.
-- **Find it** – you get a name and click anywhere inside its zone. On a miss you see how many metres outside it you were and which zone you clicked.
+- **Find it** – you get a name and click anywhere inside its zone. A click just outside the edge is a **Close** and still counts as correct, and clicking a zone that goes by one of the target's other names (B Short for Catwalk on Mirage) is a hit. Otherwise you see how many metres outside it you were and which zone you clicked.
 - **Name it** – a zone lights up on the radar; pick its name from four nearby callouts (keys `1`–`4`).
 - **Edit** – select a zone, drag inside it to move it, drag a corner to resize it, or drag the round handle to move its name. Rectangles stay rectangles; **Add corner** (or a double-click on an edge) turns one into a free shape for the rare zone that needs it, and **Make rectangle** turns it back. Then copy or download that map's data.
 

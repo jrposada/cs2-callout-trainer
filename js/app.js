@@ -916,7 +916,8 @@
     let detail;
     if (state.mode === "find") {
       if (r.kind === "hit") {
-        detail = r.near && r.near.id !== c.id ? `You clicked <strong>${esc(r.near.name)}</strong>, which is inside it.` : "";
+        if (r.alias) detail = `You clicked <strong>${esc(r.near.name)}</strong>, which some teams also call ${esc(c.name)}.`;
+        else detail = r.near && r.near.id !== c.id ? `You clicked <strong>${esc(r.near.name)}</strong>, which is inside it.` : "";
       } else {
         detail = `You were <strong>${meters(r.d)} m</strong> outside it.`;
         if (r.near && r.near.id !== c.id) detail += ` You clicked <strong>${esc(r.near.name)}</strong>.`;
@@ -940,15 +941,18 @@
     const inside = pointInPoly(p, pts);
     const edge = inside ? { d: 0, x: p.x, y: p.y } : edgeNearest(p, pts);
     const near = calloutAt(p);
-    const kind = inside || (near && near.name === c.name) ? "hit" : edge.d <= CLOSE_PX ? "close" : "miss";
+    // A zone that goes by the target's name (either way round) is the same callout to a teammate.
+    const alias = !inside && !!near && (near.name === c.name || c.alt.includes(near.name) || near.alt.includes(c.name));
+    const kind = inside || alias ? "hit" : edge.d <= CLOSE_PX ? "close" : "miss";
     const q = state.quiz;
     q.answered = true;
-    q.results[q.i] = { kind, d: kind === "hit" ? 0 : edge.d, near, id: c.id };
-    score(state.map.id, c.id, kind === "hit");
+    q.results[q.i] = { kind, d: kind === "hit" ? 0 : edge.d, near, alias, id: c.id };
+    // Zone edges are hand-placed and approximate, so "close" counts as correct.
+    score(state.map.id, c.id, kind !== "miss");
     // feedback on the radar
     fbPoly("fb-answer", c);
-    if (!inside) el("line", { class: "fb-line", x1: p.x, y1: p.y, x2: edge.x, y2: edge.y }, layerFb);
-    fbCircle("fb-guess" + (kind === "hit" ? " hit" : ""), p, 5);
+    if (kind !== "hit") el("line", { class: "fb-line", x1: p.x, y1: p.y, x2: edge.x, y2: edge.y }, layerFb);
+    fbCircle("fb-guess" + (kind !== "miss" ? " hit" : ""), p, 5);
     fbLabel(c, c.name, 0, 4.5);
     renderMapList();
     renderPanel();
@@ -1021,8 +1025,8 @@
   function renderQuizSummary() {
     const q = state.quiz;
     const total = q.results.length;
-    const hits = q.results.filter((r) => r.kind === "hit").length;
-    const missed = q.results.filter((r) => r.kind !== "hit").map((r) => state.map.callouts.find((c) => c.id === r.id));
+    const hits = q.results.filter((r) => r.kind !== "miss").length;
+    const missed = q.results.filter((r) => r.kind === "miss").map((r) => state.map.callouts.find((c) => c.id === r.id));
     panel.innerHTML = `
       ${progressBar()}
       <div>
