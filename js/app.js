@@ -39,6 +39,10 @@
   const TOUCH = window.matchMedia && matchMedia("(pointer: coarse)").matches;
   const NARROW = window.matchMedia ? matchMedia("(max-width: 860px)") : { matches: false };
   const MASTER_STREAK = 3;
+  // Extra modes from other scripts (js/live.js): window.CCT_MODES[id] = { init, render, leave, rescale, busy }.
+  const EXT = window.CCT_MODES || {};
+  const MODES = ["explore", "find", "name", "edit", ...Object.keys(EXT)];
+  const extLeave = () => { for (const k in EXT) if (EXT[k].leave) EXT[k].leave(); };
 
   // ---------- dom ----------
   const $ = (s, el = document) => el.querySelector(s);
@@ -167,7 +171,8 @@
   let leaveAsk = null;
   function canLeave(key) {
     const q = state.quiz;
-    if (!q || q.done || !q.results.length) return true;
+    const busy = (q && !q.done && q.results.length) || Object.values(EXT).some((x) => x.busy && x.busy());
+    if (!busy) return true;
     if (leaveAsk && leaveAsk.key === key && Date.now() - leaveAsk.t < LEAVE_MS) { leaveAsk = null; return true; }
     leaveAsk = { key, t: Date.now() };
     toast("Round in progress \u2014 click again to leave", LEAVE_MS);
@@ -457,6 +462,7 @@
       t.setAttribute("dx", t.dataset.dx * u);
       t.setAttribute("dy", t.dataset.dy * u);
     });
+    if (EXT[state.mode] && EXT[state.mode].rescale) EXT[state.mode].rescale(u);
   }
   function fbCircle(cls, p, r) { return el("circle", { class: cls, cx: p.x, cy: p.y, "data-r": r }, layerFb); }
   function fbPoly(cls, c) { return el("polygon", { class: cls, points: ptsStr(c) }, layerFb); }
@@ -520,6 +526,7 @@
 
   function selectMap(id, keepMode) {
     const m = MAPS.find((x) => x.id === id) || MAPS[0];
+    extLeave();
     state.map = m;
     state.selected = null;
     state.search = "";
@@ -537,6 +544,7 @@
 
   // ---------- modes ----------
   function setMode(mode) {
+    extLeave();
     state.mode = mode;
     state.quiz = null;
     prefs.mode = mode;
@@ -567,6 +575,7 @@
     $("#stagePrompt").textContent = "";
     if (state.mode === "explore") return renderExplore();
     if (state.mode === "edit") return renderEdit();
+    if (EXT[state.mode]) return EXT[state.mode].render();
     return renderQuiz();
   }
 
@@ -1038,17 +1047,24 @@
   });
 
   // ---------- boot ----------
+  // What extra modes get to use. setLevel here also redraws, like the level buttons.
+  const api = {
+    state, prefs, panel, svg, $, el, esc, toast, unit, levelName, ensureVisible, NARROW,
+    savePrefs: () => store.set(K.prefs, prefs),
+    setLevel: (lv) => { setLevel(lv); renderMarkers(); renderPanel(); },
+    callout: (id) => state.map.callouts.find((c) => c.id === id),
+  };
+  for (const k in EXT) if (EXT[k].init) EXT[k].init(api);
   function boot() {
     if (!MAPS.length) { panel.textContent = "No map data found. Check that data/maps.js loads."; return; }
     const [hMap, hMode] = location.hash.replace(/^#/, "").split("/");
-    const modes = ["explore", "find", "name", "edit"];
-    state.mode = modes.includes(hMode) ? hMode : modes.includes(prefs.mode) ? prefs.mode : "explore";
+    state.mode = MODES.includes(hMode) ? hMode : MODES.includes(prefs.mode) ? prefs.mode : "explore";
     selectMap(MAPS.some((m) => m.id === hMap) ? hMap : prefs.map);
   }
   window.addEventListener("hashchange", () => {
     const [hMap, hMode] = location.hash.replace(/^#/, "").split("/");
     const newMap = state.map && hMap && hMap !== state.map.id && MAPS.some((m) => m.id === hMap);
-    const newMode = hMode && hMode !== state.mode && ["explore", "find", "name", "edit"].includes(hMode);
+    const newMode = hMode && hMode !== state.mode && MODES.includes(hMode);
     if (!newMap && !newMode) return;
     if (!canLeave("hash:" + location.hash)) return updateHash(); // restore the hash of the round we kept
     if (newMap) selectMap(hMap);
