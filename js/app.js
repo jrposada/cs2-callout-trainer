@@ -15,6 +15,20 @@
   const BASE = window.CALLOUT_MAPS || [];
   let edits = store.get(K.edits, {});
   let progress = store.get(K.progress, {});
+  // Progress is kept per quiz mode: progress[map][id] = { find: {s, c, k}, name: {s, c, k} }.
+  // Older saves held one {s, c, k} per callout; that record moves into find (Find it was the headline drill).
+  (function migrateProgress() {
+    let moved = false;
+    for (const mapId in progress) {
+      const P = progress[mapId];
+      if (!P || typeof P !== "object") continue;
+      for (const id in P) {
+        const r = P[id];
+        if (r && typeof r.s === "number" && !r.find && !r.name) { P[id] = { find: { s: r.s, c: r.c || 0, k: r.k || 0 } }; moved = true; }
+      }
+    }
+    if (moved) store.set(K.progress, progress);
+  })();
   const prefs = Object.assign({ map: BASE[0] && BASE[0].id, mode: "explore", labels: false, round: 10 }, store.get(K.prefs, {}));
 
   // Maps with the user's local position edits applied.
@@ -192,26 +206,33 @@
   }
 
   // ---------- progress ----------
-  function rec(mapId, id) {
-    progress[mapId] = progress[mapId] || {};
-    return (progress[mapId][id] = progress[mapId][id] || { s: 0, c: 0, k: 0 });
+  // The record a quiz mode trains; Explore and Edit read Find it's.
+  const progMode = (mode) => (mode === "name" ? "name" : "find");
+  // A callout's record for one mode, or undefined if that mode never asked it.
+  function recOf(mapId, id, mode) {
+    const r = progress[mapId] && progress[mapId][id];
+    return r ? r[progMode(mode)] : undefined;
   }
-  function score(mapId, id, ok) {
-    const r = rec(mapId, id);
+  function rec(mapId, id, mode) {
+    const P = (progress[mapId] = progress[mapId] || {});
+    const r = (P[id] = P[id] || {});
+    return (r[progMode(mode)] = r[progMode(mode)] || { s: 0, c: 0, k: 0 });
+  }
+  function score(mapId, id, ok, mode) {
+    const r = rec(mapId, id, mode);
     r.s += 1;
     if (ok) { r.c += 1; r.k += 1; } else { r.k = 0; }
     store.set(K.progress, progress);
   }
-  function calloutMastery(mapId, id) {
-    const r = progress[mapId] && progress[mapId][id];
+  function calloutMastery(mapId, id, mode) {
+    const r = recOf(mapId, id, mode);
     return r ? Math.min(r.k, MASTER_STREAK) / MASTER_STREAK : 0;
   }
   // Learned = streak of MASTER_STREAK or more; learning = seen but not learned; fresh = never asked.
-  function mapCounts(m) {
-    const P = progress[m.id] || {};
+  function mapCounts(m, mode) {
     const n = { learned: 0, learning: 0, fresh: 0, total: m.callouts.length };
     for (const c of m.callouts) {
-      const r = P[c.id];
+      const r = recOf(m.id, c.id, mode);
       if (!r || !r.s) n.fresh++;
       else if (r.k >= MASTER_STREAK) n.learned++;
       else n.learning++;
@@ -226,14 +247,14 @@
   const WEAK_SHARE = 0.4;
   // Weak callouts come back first; the rest is a weighted pick where weak seen callouts outweigh unseen ones.
   function pickRound(pool, n) {
-    const P = progress[state.map.id] || {};
-    const misses = (c) => P[c.id].s - P[c.id].c;
+    const mode = state.mode, R = (c) => recOf(state.map.id, c.id, mode);
+    const misses = (c) => R(c).s - R(c).c;
     n = Math.min(n, pool.length);
-    const weak = shuffle(pool.filter((c) => P[c.id] && P[c.id].s > 0 && P[c.id].k === 0)).sort((a, b) => misses(b) - misses(a));
+    const weak = shuffle(pool.filter((c) => R(c) && R(c).s > 0 && R(c).k === 0)).sort((a, b) => misses(b) - misses(a));
     const picked = weak.slice(0, Math.floor(n * WEAK_SHARE));
     const rest = pool.filter((c) => !picked.includes(c)).map((c) => {
-      const r = P[c.id];
-      const w = r ? 1 + 4 * (1 - calloutMastery(state.map.id, c.id)) + Math.min(r.s - r.c, 4) : 3;
+      const r = R(c);
+      const w = r ? 1 + 4 * (1 - calloutMastery(state.map.id, c.id, mode)) + Math.min(r.s - r.c, 4) : 3;
       return { c, key: Math.pow(Math.random(), 1 / w) };
     });
     rest.sort((a, b) => b.key - a.key);
@@ -576,8 +597,9 @@
       b.type = "button";
       b.className = "map-btn";
       b.setAttribute("aria-current", String(state.map && m.id === state.map.id));
-      const n = mapCounts(m);
-      b.title = `${m.name}: ${n.learned} / ${n.total} learned`;
+      // Map buttons follow Find it, the harder drill.
+      const n = mapCounts(m, "find");
+      b.title = `${m.name}: ${n.learned} / ${n.total} learned in Find it`;
       b.innerHTML = `${esc(m.name)}<span class="mastery"><i style="width:${n.total ? (100 * n.learned) / n.total : 0}%"></i></span>`;
       b.onclick = () => { if (m.id !== state.map.id && canLeave("map:" + m.id)) selectMap(m.id); };
       nav.appendChild(b);
@@ -665,14 +687,18 @@
     return c.name.toLowerCase().includes(q) || c.alt.some((a) => a.toLowerCase().includes(q));
   }
 
-  function calloutCard(c, cls = "") {
-    const r = progress[state.map.id] && progress[state.map.id][c.id];
+  // Status of one callout in each quiz mode, e.g. "Find it: Learned. Name it: 2 of 3 in a row."
+  function modeStatus(mapId, id, mode) {
+    const r = recOf(mapId, id, mode);
     const ratio = r && r.s ? ` <span class="lifetime">${r.c} of ${r.s} right overall.</span>` : "";
+    return `<span class="mode-st">${mode === "name" ? "Name it" : "Find it"}: <span class="status">${calloutStatus(r)}.</span>${ratio}</span>`;
+  }
+  function calloutCard(c, cls = "") {
     return `<div class="card ${cls}">
       <h3>${esc(c.name)}</h3>
       ${c.alt.length ? `<p class="alt">Also called ${c.alt.map(esc).join(", ")}</p>` : ""}
       <p class="desc">${esc(c.desc)}</p>
-      <div class="meta">${state.map.levels.length > 1 ? esc(levelName(c.level)) + ". " : ""}<span class="status">${calloutStatus(r)}.</span>${ratio}</div>
+      <div class="meta">${state.map.levels.length > 1 ? `<span class="mode-st">${esc(levelName(c.level))}.</span>` : ""}${modeStatus(state.map.id, c.id, "find")}${modeStatus(state.map.id, c.id, "name")}</div>
     </div>`;
   }
 
@@ -693,7 +719,7 @@
         ${list.map((c) => `<li><button type="button" data-id="${c.id}" class="${c.id === state.selected ? "is-active" : ""}">
             <span class="nm">${esc(c.name)}</span>
             ${m.levels.length > 1 && c.level === "lower" ? `<span class="lv">lower</span>` : ""}
-            <span class="ms" title="${calloutStatus(progress[m.id] && progress[m.id][c.id])}"><i style="width:${calloutMastery(m.id, c.id) * 100}%"></i></span>
+            <span class="ms" title="Find it: ${calloutStatus(recOf(m.id, c.id, "find"))}. Name it: ${calloutStatus(recOf(m.id, c.id, "name"))}."><span><i style="width:${calloutMastery(m.id, c.id, "find") * 100}%"></i></span><span><i style="width:${calloutMastery(m.id, c.id, "name") * 100}%"></i></span></span>
           </button></li>`).join("") || `<li class="lede">No callout matches “${esc(state.search)}”.</li>`}
       </ul>
       ${footer()}`;
@@ -940,8 +966,9 @@
 
   function renderQuizSetup() {
     const m = state.map;
-    const n = mapCounts(m);
+    const n = mapCounts(m, state.mode);
     const isFind = state.mode === "find";
+    const seen = progress[m.id] && Object.keys(progress[m.id]).length;
     const sizes = [10, 20, 0];
     const ne = editCount(m);
     panel.innerHTML = `
@@ -956,13 +983,13 @@
       <div class="row"><button type="button" class="btn primary" id="start">Start ${esc(m.name)} round</button></div>
       <div class="breakdown">
         <p class="counts"><strong class="n-learned">${n.learned} learned</strong> · <span class="n-learning">${n.learning} learning</span> · <span class="n-new">${n.fresh} new</span></p>
-        <p class="lede">A callout counts as learned after ${MASTER_STREAK} correct answers in a row.</p>
-        ${n.fresh < n.total ? `<button type="button" class="link-btn" id="resetProgress">Reset ${esc(m.name)} progress</button>` : ""}
+        <p class="lede">In ${isFind ? "Find it" : "Name it"}, a callout counts as learned after ${MASTER_STREAK} correct answers in a row. ${isFind ? "Name it" : "Find it"} keeps its own count.</p>
+        ${seen ? `<button type="button" class="link-btn" id="resetProgress">Reset ${esc(m.name)} progress</button>` : ""}
       </div>
       ${footer()}`;
     const rp = $("#resetProgress");
     if (rp) rp.onclick = () => {
-      if (!confirm(`Reset your ${m.name} progress? Every ${m.name} callout goes back to new. Other maps keep theirs.`)) return;
+      if (!confirm(`Reset your ${m.name} progress? Every ${m.name} callout goes back to new in both Find it and Name it. Other maps keep theirs.`)) return;
       delete progress[m.id];
       store.set(K.progress, progress);
       renderMapList();
@@ -1104,7 +1131,7 @@
     q.answered = true;
     q.results[q.i] = { kind, d: kind === "hit" ? 0 : edge.d, near, alias, id: c.id };
     // Zone edges are hand-placed and approximate, so "close" counts as correct.
-    score(state.map.id, c.id, kind !== "miss");
+    score(state.map.id, c.id, kind !== "miss", "find");
     const clicked = near && near.id !== c.id ? ` You clicked ${near.name}.` : "";
     announce(kind === "hit" ? `Right spot.${alias ? clicked : ""}`
       : `${kind === "close" ? "Close" : "Missed"}, ${meters(edge.d)} metre${meters(edge.d) === 1 ? "" : "s"} outside ${c.name}.${clicked}`);
@@ -1153,7 +1180,7 @@
     q.answered = true;
     q.choice = id;
     q.results[q.i] = { kind: ok ? "hit" : "miss", id: c.id, pick: id };
-    score(state.map.id, c.id, ok);
+    score(state.map.id, c.id, ok, "name");
     announce(ok ? "Correct." : `Wrong. That zone is ${c.name}.`);
     clearFeedback();
     if (!ok) {

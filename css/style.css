@@ -236,8 +236,11 @@ button { cursor: pointer; }
 .callout-list button:hover, .callout-list button.is-active { background: var(--raised); }
 .callout-list .nm { font: 600 17px/1.2 var(--display); }
 .callout-list .lv { color: var(--muted); font-size: 13px; }
-.callout-list .ms { margin-left: auto; width: 34px; height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; align-self: center; flex: none; }
+/* Two streak bars: Find it on top, Name it below. */
+.callout-list .ms { margin-left: auto; width: 34px; display: flex; flex-direction: column; gap: 2px; align-self: center; flex: none; }
+.callout-list .ms > span { height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; }
 .callout-list .ms i { display: block; height: 100%; background: var(--ct-blue); }
+.callout-list .ms > span + span i { background: var(--t-gold); }
 
 .card { padding: 14px 16px; border-radius: var(--radius-m); background: var(--ink); border: 1px solid var(--line); }
 .card h3 { margin: 0; font: 700 26px/1.05 var(--display); }
@@ -245,6 +248,7 @@ button { cursor: pointer; }
 .card p.desc { margin: 8px 0 0; }
 .card .meta { margin-top: 10px; color: var(--muted); font-size: 13px; }
 .card .meta .status { color: var(--text); }
+.card .meta .mode-st { display: block; }
 
 /* Quiz setup: progress breakdown and reset */
 .breakdown { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
