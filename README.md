@@ -11,13 +11,16 @@ Cobblestone is not included because it is not in CS2, so there is no CS2 radar f
 - **Find it** – you get a name and click anywhere inside its zone. On a miss you see how many metres outside it you were and which zone you clicked.
 - **Name it** – a zone lights up on the radar; pick its name from four nearby callouts (keys `1`–`4`).
 - **Edit** – select a zone, drag inside it to move it, drag a corner to resize it, or drag the round handle to move its name. Rectangles stay rectangles; **Add corner** (or a double-click on an edge) turns one into a free shape for the rare zone that needs it, and **Make rectangle** turns it back. Then copy or download that map's data.
-- **Live** – for a second screen during a match. Hit **Start** (or `Space`) when freeze time ends and dots run from each spawn along the fastest routes to the early peek spots in real time, with a round clock and a list of arrival times. Filter by side, pick a weapon to rescale the times, or slow playback down to study (`R` resets).
 
 Zones are rectangles by default and don't need to cover the whole map. They are layered: **areas** (rooms, corridors, site zones) never overlap each other, and **spots** (boxes, corners, small positions) sit on top. Clicking a spot that lies inside an area counts for both: Default on A Site is a correct answer for *A Site* and for *Default*.
 
 Rounds are 10, 20 or every callout on the map. Callouts you miss come up more often, and a callout counts as learned after three correct answers in a row. Progress and edits are stored in the browser (localStorage). Two-level maps (Nuke, Vertigo) switch levels automatically during quizzes.
 
 Links are shareable: `#mirage/find`, `#nuke/explore`, and so on.
+
+## Live mode
+
+The **Live** tab is for a second screen during a match. Hit **Start** (or `Space`) when freeze time ends and dots run from each spawn along the fastest routes to the early peek spots in real time, with a round clock and a list of arrival times. Filter by side, pick a weapon to rescale the times, or slow playback down to study (`R` resets). Links work too: `#mirage/live`.
 
 ## Where the data comes from
 

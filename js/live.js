@@ -367,6 +367,15 @@
   });
 
   // ---------- registration ----------
+  // Add the tab here, copying a sibling's attributes, so index.html's tab list stays untouched.
+  // Runs before js/app.js, which wires up every .modes button.
+  const tabs = document.querySelector(".modes");
+  if (tabs && tabs.lastElementChild && !tabs.querySelector('[data-mode="live"]')) {
+    const b = tabs.lastElementChild.cloneNode(false);
+    b.dataset.mode = "live";
+    b.textContent = "Live";
+    tabs.appendChild(b);
+  }
   window.CCT_MODES = window.CCT_MODES || {};
   window.CCT_MODES.live = {
     init(api) {
