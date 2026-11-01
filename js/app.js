@@ -640,11 +640,21 @@
     document.body.classList.toggle("quiz-step", step);
     document.body.classList.toggle("quiz-answered", step && q.answered);
     syncLevelButtons();
+    syncEditBadge();
     $("#stagePrompt").textContent = "";
     $("#stagePrompt").classList.remove("is-find");
     if (state.mode === "explore") return renderExplore();
     if (state.mode === "edit") return renderEdit();
     return renderQuiz();
+  }
+
+  // Local edits change quiz answers, so the Edit tab shows how many the current map has.
+  function editCount(m) { return edits[m.id] ? Object.keys(edits[m.id]).length : 0; }
+  function syncEditBadge() {
+    const b = $(".modes button[data-mode='edit']"), n = editCount(state.map);
+    b.textContent = n ? `Edit · ${n}` : "Edit";
+    if (n) b.setAttribute("aria-label", `Edit, ${n} local zone edit${n === 1 ? "" : "s"} on ${state.map.name}`);
+    else b.removeAttribute("aria-label");
   }
 
   function footer() {
@@ -752,7 +762,7 @@
   function renderEdit() {
     const m = state.map;
     const sel = selectedCallout();
-    const n = edits[m.id] ? Object.keys(edits[m.id]).length : 0;
+    const n = editCount(m);
     const npts = sel ? ptsOf(sel).length : 0;
     panel.innerHTML = `
       <p class="lede">Click a zone to select it. Drag inside it to move it, drag a corner to resize it, and drag the round handle to move its name. Zones don't need to cover the whole map. Changes save in this browser and are used by the quizzes straight away. Export them to update the site for everyone.</p>
@@ -933,11 +943,13 @@
     const n = mapCounts(m);
     const isFind = state.mode === "find";
     const sizes = [10, 20, 0];
+    const ne = editCount(m);
     panel.innerHTML = `
       <p class="lede">${isFind
         ? `You get a callout name. <strong>Click anywhere inside its zone</strong> on the radar.`
         : `A zone lights up on the radar. <strong>Pick its name</strong> from four nearby callouts.`}
         Callouts you keep missing come up more often.</p>
+      ${ne ? `<p class="lede">Using your ${ne} local zone edit${ne === 1 ? "" : "s"} on ${esc(m.name)}.</p>` : ""}
       <div class="row"><span class="field-label">Questions</span>
         <div class="seg" id="roundSize">${sizes.map((s) => `<button type="button" data-n="${s}" aria-pressed="${prefs.round === s}">${s || "All " + m.callouts.length}</button>`).join("")}</div>
       </div>
