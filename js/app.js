@@ -36,6 +36,7 @@
   // ---------- constants ----------
   const CLOSE_PX = 24;     // radar px outside a zone that still counts as "close"
   const INCH_TO_M = 0.0254; // 1 Hammer unit ~ 1 inch
+  const UNDO_KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘Z" : "Ctrl+Z";
   const TOUCH = window.matchMedia && matchMedia("(pointer: coarse)").matches;
   const NARROW = window.matchMedia ? matchMedia("(max-width: 860px)") : { matches: false };
   const MASTER_STREAK = 3;
@@ -760,6 +761,8 @@
         : `<div class="card"><p class="desc" style="margin:0">Pick a zone on the map to select it.</p></div>`}
       <div class="row">
         <span class="field-label">${n ? `${n} changed on ${esc(m.name)}` : `No changes on ${esc(m.name)} yet`}</span>
+        <span class="spacer"></span>
+        <button type="button" class="btn small" id="undoEdit" title="Undo the last edit (${UNDO_KEY})" ${canUndo() ? "" : "disabled"}>Undo</button>
       </div>
       <div class="row">
         <button type="button" class="btn primary" id="copyJson">Copy map data</button>
@@ -794,7 +797,13 @@
       };
     }
     const u = $("#undoOne");
-    if (u) u.onclick = () => { delete edits[m.id][sel.id]; state.vertex = null; saveEdits(); };
+    if (u) u.onclick = () => { pushUndo("reset of " + sel.name, sel.id); delete edits[m.id][sel.id]; state.vertex = null; saveEdits(); };
+    $("#undoEdit").onclick = () => {
+      undoEdit();
+      // The panel re-renders, so keep keyboard focus on Undo while there is more to undo.
+      const b = $("#undoEdit");
+      if (b && !b.disabled) b.focus({ preventScroll: true });
+    };
     $("#copyJson").onclick = async () => {
       try { await navigator.clipboard.writeText(exportJson()); toast("Map data copied"); }
       catch { const f = downloadJson(true); toast(`Couldn't copy to the clipboard, downloaded ${f} instead.`, 4000); }
@@ -802,7 +811,8 @@
     $("#dlJson").onclick = () => downloadJson();
     $("#resetEdits").onclick = () => {
       if (!confirm(`Discard ${n} changed zone${n === 1 ? "" : "s"} on ${m.name}?`)) return;
-      delete edits[m.id]; state.vertex = null; saveEdits(); toast("Changes discarded");
+      pushUndo(`discard of ${n} change${n === 1 ? "" : "s"}`);
+      delete edits[m.id]; state.vertex = null; saveEdits(); toast(`Changes discarded. Press ${UNDO_KEY} to undo.`, 3000);
     };
   }
   // Same layout as data/maps.js, so the export can be pasted straight in.
@@ -855,8 +865,30 @@
     if (!quiet) toast("Downloaded " + a.download);
     return a.download;
   }
+  // Step undo for Edit: one stack per map of earlier snapshots of that map's edits, kept for the session.
+  const UNDO_MAX = 50;
+  const undoStacks = {};
+  function pushUndo(what, id) {
+    const mid = state.map.id, st = undoStacks[mid] || (undoStacks[mid] = []);
+    st.push({ what, id, prev: edits[mid] ? JSON.parse(JSON.stringify(edits[mid])) : null });
+    if (st.length > UNDO_MAX) st.shift();
+  }
+  function canUndo() { return !!(undoStacks[state.map.id] || []).length; }
+  function undoEdit() {
+    const st = undoStacks[state.map.id];
+    const u = st && st.pop();
+    if (!u) return false;
+    if (u.prev) edits[state.map.id] = u.prev; else delete edits[state.map.id];
+    state.vertex = null;
+    const c = u.id && state.map.callouts.find((x) => x.id === u.id);
+    if (c) { state.selected = c.id; if (c.level !== state.level) setLevel(c.level); }
+    saveEdits();
+    announce("Undid " + u.what);
+    return true;
+  }
   function commitEdit(c) {
     if (!c) return;
+    pushUndo("change to " + c.name, c.id);
     edits[state.map.id] = edits[state.map.id] || {};
     const e = { x: c.x, y: c.y };
     if (c.poly) e.poly = c.poly.slice();
@@ -1176,6 +1208,11 @@
         if (o) answerName(o.id);
         return;
       }
+    }
+    if (state.mode === "edit" && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "z") {
+      e.preventDefault();
+      if (!undoEdit()) announce("Nothing to undo");
+      return;
     }
     if (state.mode === "edit" && (e.key === "Delete" || e.key === "Backspace") && state.vertex != null) {
       // Same rule as the Delete point button: never on rectangles or below three points.
