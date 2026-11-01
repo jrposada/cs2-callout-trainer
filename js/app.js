@@ -995,9 +995,10 @@
     const wrong = kind !== "hit" && near && near.id !== c.id ? near : null;
     if (wrong) fbPoly("fb-wrong", wrong);
     fbPoly("fb-answer", c);
-    if (wrong) fbLabel(wrong, wrong.name, 0, 4.5);
     if (kind !== "hit") el("line", { class: "fb-line", x1: p.x, y1: p.y, x2: edge.x, y2: edge.y }, layerFb);
     fbCircle("fb-guess" + (kind !== "miss" ? " hit" : ""), p, 5);
+    // After the dot so it stays readable; nudged away from the answer's name so neighbours don't collide.
+    if (wrong) fbLabel(wrong, wrong.name, 0, wrong.y <= c.y ? -12 : 21);
     fbLabel(c, c.name, 0, 4.5);
     renderMapList();
     renderPanel();
