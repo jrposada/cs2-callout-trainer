@@ -281,6 +281,9 @@ button { cursor: pointer; }
 .progress span.close { background: var(--t-gold); }
 .progress span.miss { background: var(--miss); }
 .progress span.now { background: var(--text); }
+/* A re-asked miss: a narrower segment. */
+.progress span.again { flex: .55; }
+.again-tag { color: var(--t-gold); font-weight: 600; }
 
 .result { padding: 12px 14px; border-radius: var(--radius-m); border-left: 3px solid var(--line); background: var(--ink); }
 .result.hit { border-left-color: var(--ct-blue); }

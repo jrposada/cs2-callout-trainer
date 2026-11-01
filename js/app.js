@@ -957,7 +957,7 @@
     const q = state.quiz;
     // Find it: the target name sits on the radar until you answer (a pill on wide screens).
     const sp = $("#stagePrompt");
-    sp.textContent = state.mode === "find" && q && !q.done && !q.answered ? current().name : "";
+    sp.textContent = state.mode === "find" && q && !q.done && !q.answered ? (isRetry() ? "Again: " : "") + current().name : "";
     sp.classList.toggle("is-find", !!sp.textContent);
     if (!q) return renderQuizSetup();
     if (q.done) return renderQuizSummary();
@@ -1010,12 +1010,27 @@
     if (onlyIds) pool = pool.filter((c) => onlyIds.includes(c.id));
     const n = onlyIds ? pool.length : (prefs.round || pool.length);
     // learned0 is the map's learned count before the round, for the summary's "9 → 12 learned".
-    state.quiz = { items: pickRound(pool, n), i: 0, results: [], answered: false, done: false, learned0: mapCounts(m, state.mode).learned };
+    // retry[i] marks a re-asked miss and stays index-aligned with items.
+    const items = pickRound(pool, n);
+    state.quiz = { items, i: 0, results: [], answered: false, done: false, learned0: mapCounts(m, state.mode).learned,
+      retry: items.map(() => false), requeued: new Set() };
     fitView();
     prepareStep();
   }
 
   function current() { return state.quiz.items[state.quiz.i]; }
+  const isRetry = () => !!state.quiz.retry[state.quiz.i];
+  // A first miss comes back 3 or 4 questions later (or last), once per callout per round.
+  function requeue(c) {
+    const q = state.quiz;
+    if (isRetry() || q.requeued.has(c.id)) return false;
+    q.requeued.add(c.id);
+    const at = Math.min(q.i + 3 + Math.floor(Math.random() * 2), q.items.length);
+    q.items.splice(at, 0, c);
+    q.retry.splice(at, 0, true);
+    return true;
+  }
+  const AGAIN_NOTE = "It comes back in a few questions.";
 
   function prepareStep() {
     const q = state.quiz;
@@ -1032,7 +1047,8 @@
       showTarget(c);
       rescaleMarks();
     }
-    announce(`Question ${q.i + 1} of ${q.items.length}.${state.mode === "find" ? ` Where is ${c.name}?` : ""}`);
+    const again = isRetry() ? " Again:" : "";
+    announce(`Question ${q.i + 1} of ${q.items.length}.${state.mode === "find" ? `${again} Where is ${c.name}?` : again ? " Again: what is this zone called?" : ""}`);
     // Keyboard users start each question where they answer it: the first name, or the Find target.
     const f = panel.querySelector(state.mode === "name" ? ".choice" : ".callname");
     if (f) f.focus({ preventScroll: true });
@@ -1052,7 +1068,8 @@
     const q = state.quiz;
     return `<div class="progress" aria-hidden="true">${q.items.map((_, i) => {
       const r = q.results[i];
-      return `<span class="${r ? r.kind : i === q.i ? "now" : ""}"></span>`;
+      const cls = (r ? r.kind : i === q.i ? "now" : "") + (q.retry[i] ? " again" : "");
+      return `<span class="${cls.trim()}"></span>`;
     }).join("")}</div>`;
   }
 
@@ -1063,7 +1080,7 @@
     panel.innerHTML = `
       ${progressBar()}
       <div class="prompt">
-        <p class="ask">Question ${q.i + 1} of ${q.items.length}. Where is</p>
+        <p class="ask">Question ${q.i + 1} of ${q.items.length}. ${isRetry() ? `<span class="again-tag">Again:</span> where` : "Where"} is</p>
         <h2 class="callname" tabindex="-1">${esc(c.name)}</h2>
         ${c.alt.length ? `<p class="hint">Also called ${c.alt.map(esc).join(", ")}</p>` : ""}
         ${levelChip}
@@ -1105,6 +1122,7 @@
       const pick = r.kind !== "hit" && state.map.callouts.find((o) => o.id === r.pick);
       if (pick && pick.level !== c.level) detail += ` You picked <strong>${esc(pick.name)}</strong> (${pick.level} level).`;
     }
+    if (r.again) detail = (detail ? detail + " " : "") + AGAIN_NOTE;
     const alt = state.mode === "name" && c.alt.length ? `<p class="alt">Also called ${c.alt.map(esc).join(", ")}</p>` : "";
     return `<div class="result ${r.kind}"><h4>${titles[r.kind]}</h4>${detail ? `<p class="detail">${detail}</p>` : ""}<p class="desc">${esc(c.desc)}</p>${alt}</div>`;
   }
@@ -1133,9 +1151,10 @@
     q.results[q.i] = { kind, d: kind === "hit" ? 0 : edge.d, near, alias, id: c.id, p: { x: p.x, y: p.y } };
     // Zone edges are hand-placed and approximate, so "close" counts as correct.
     score(state.map.id, c.id, kind !== "miss", "find");
+    if (kind === "miss") q.results[q.i].again = requeue(c);
     const clicked = near && near.id !== c.id ? ` You clicked ${near.name}.` : "";
     announce(kind === "hit" ? `Right spot.${alias ? clicked : ""}`
-      : `${kind === "close" ? "Close" : "Missed"}, ${meters(edge.d)} metre${meters(edge.d) === 1 ? "" : "s"} outside ${c.name}.${clicked}`);
+      : `${kind === "close" ? "Close" : "Missed"}, ${meters(edge.d)} metre${meters(edge.d) === 1 ? "" : "s"} outside ${c.name}.${clicked}${q.results[q.i].again ? " " + AGAIN_NOTE : ""}`);
     // feedback on the radar: the zone you clicked (if it wasn't a hit), then the answer on top
     const wrong = kind !== "hit" && near && near.id !== c.id ? near : null;
     if (wrong) fbPoly("fb-wrong", wrong);
@@ -1157,7 +1176,7 @@
     panel.innerHTML = `
       ${progressBar()}
       <div class="prompt">
-        <p class="ask">Question ${q.i + 1} of ${q.items.length}. What is the highlighted zone called?</p>
+        <p class="ask">Question ${q.i + 1} of ${q.items.length}. ${isRetry() ? `<span class="again-tag">Again:</span> what` : "What"} is the highlighted zone called?</p>
         ${state.map.levels.length > 1 ? `<p class="hint"><span class="chip">${esc(levelName(c.level))}</span></p>` : ""}
       </div>
       <div class="choices" id="choices">
@@ -1182,7 +1201,8 @@
     q.choice = id;
     q.results[q.i] = { kind: ok ? "hit" : "miss", id: c.id, pick: id };
     score(state.map.id, c.id, ok, "name");
-    announce(ok ? "Correct." : `Wrong. That zone is ${c.name}.`);
+    if (!ok) q.results[q.i].again = requeue(c);
+    announce(ok ? "Correct." : `Wrong. That zone is ${c.name}.${q.results[q.i].again ? " " + AGAIN_NOTE : ""}`);
     clearFeedback();
     if (!ok) {
       const wrong = state.map.callouts.find((o) => o.id === id);
