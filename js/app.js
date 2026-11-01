@@ -189,9 +189,21 @@
     const r = progress[mapId] && progress[mapId][id];
     return r ? Math.min(r.k, MASTER_STREAK) / MASTER_STREAK : 0;
   }
-  function mapMastery(m) {
-    if (!m.callouts.length) return 0;
-    return m.callouts.reduce((a, c) => a + calloutMastery(m.id, c.id), 0) / m.callouts.length;
+  // Learned = streak of MASTER_STREAK or more; learning = seen but not learned; fresh = never asked.
+  function mapCounts(m) {
+    const P = progress[m.id] || {};
+    const n = { learned: 0, learning: 0, fresh: 0, total: m.callouts.length };
+    for (const c of m.callouts) {
+      const r = P[c.id];
+      if (!r || !r.s) n.fresh++;
+      else if (r.k >= MASTER_STREAK) n.learned++;
+      else n.learning++;
+    }
+    return n;
+  }
+  function calloutStatus(r) {
+    if (!r || !r.s) return "Not drilled yet";
+    return r.k >= MASTER_STREAK ? "Learned" : `${r.k} of ${MASTER_STREAK} in a row`;
   }
   // Up to this share of a round goes to seen callouts on a zero streak, most-missed first.
   const WEAK_SHARE = 0.4;
@@ -520,9 +532,9 @@
       b.type = "button";
       b.className = "map-btn";
       b.setAttribute("aria-current", String(state.map && m.id === state.map.id));
-      const pct = Math.round(mapMastery(m) * 100);
-      b.title = `${m.name}: ${pct}% learned`;
-      b.innerHTML = `${esc(m.name)}<span class="mastery"><i style="width:${pct}%"></i></span>`;
+      const n = mapCounts(m);
+      b.title = `${m.name}: ${n.learned} / ${n.total} learned`;
+      b.innerHTML = `${esc(m.name)}<span class="mastery"><i style="width:${n.total ? (100 * n.learned) / n.total : 0}%"></i></span>`;
       b.onclick = () => { if (m.id !== state.map.id && canLeave("map:" + m.id)) selectMap(m.id); };
       nav.appendChild(b);
     }
@@ -601,12 +613,12 @@
 
   function calloutCard(c, cls = "") {
     const r = progress[state.map.id] && progress[state.map.id][c.id];
-    const stat = r ? `Answered ${r.c} of ${r.s} correctly` : "Not drilled yet";
+    const ratio = r && r.s ? ` <span class="lifetime">${r.c} of ${r.s} right overall.</span>` : "";
     return `<div class="card ${cls}">
       <h3>${esc(c.name)}</h3>
       ${c.alt.length ? `<p class="alt">Also called ${c.alt.map(esc).join(", ")}</p>` : ""}
       <p class="desc">${esc(c.desc)}</p>
-      <div class="meta">${state.map.levels.length > 1 ? esc(levelName(c.level)) + ". " : ""}${stat}.</div>
+      <div class="meta">${state.map.levels.length > 1 ? esc(levelName(c.level)) + ". " : ""}<span class="status">${calloutStatus(r)}.</span>${ratio}</div>
     </div>`;
   }
 
@@ -627,7 +639,7 @@
         ${list.map((c) => `<li><button type="button" data-id="${c.id}" class="${c.id === state.selected ? "is-active" : ""}">
             <span class="nm">${esc(c.name)}</span>
             ${m.levels.length > 1 && c.level === "lower" ? `<span class="lv">lower</span>` : ""}
-            <span class="ms" title="${Math.round(calloutMastery(m.id, c.id) * 100)}% learned"><i style="width:${calloutMastery(m.id, c.id) * 100}%"></i></span>
+            <span class="ms" title="${calloutStatus(progress[m.id] && progress[m.id][c.id])}"><i style="width:${calloutMastery(m.id, c.id) * 100}%"></i></span>
           </button></li>`).join("") || `<li class="lede">No callout matches “${esc(state.search)}”.</li>`}
       </ul>
       ${footer()}`;
@@ -829,7 +841,7 @@
 
   function renderQuizSetup() {
     const m = state.map;
-    const pct = Math.round(mapMastery(m) * 100);
+    const n = mapCounts(m);
     const isFind = state.mode === "find";
     const sizes = [10, 20, 0];
     panel.innerHTML = `
@@ -841,8 +853,21 @@
         <div class="seg" id="roundSize">${sizes.map((s) => `<button type="button" data-n="${s}" aria-pressed="${prefs.round === s}">${s || "All " + m.callouts.length}</button>`).join("")}</div>
       </div>
       <div class="row"><button type="button" class="btn primary" id="start">Start ${esc(m.name)} round</button></div>
-      <p class="lede">${pct}% of ${esc(m.name)} learned. A callout counts as learned after ${MASTER_STREAK} correct answers in a row.</p>
+      <div class="breakdown">
+        <p class="counts"><strong class="n-learned">${n.learned} learned</strong> · <span class="n-learning">${n.learning} learning</span> · <span class="n-new">${n.fresh} new</span></p>
+        <p class="lede">A callout counts as learned after ${MASTER_STREAK} correct answers in a row.</p>
+        ${n.fresh < n.total ? `<button type="button" class="link-btn" id="resetProgress">Reset ${esc(m.name)} progress</button>` : ""}
+      </div>
       ${footer()}`;
+    const rp = $("#resetProgress");
+    if (rp) rp.onclick = () => {
+      if (!confirm(`Reset your ${m.name} progress? Every ${m.name} callout goes back to new. Other maps keep theirs.`)) return;
+      delete progress[m.id];
+      store.set(K.progress, progress);
+      renderMapList();
+      renderQuizSetup();
+      toast(`${m.name} progress reset`);
+    };
     $("#roundSize").onclick = (e) => {
       const b = e.target.closest("button"); if (!b) return;
       prefs.round = Number(b.dataset.n); store.set(K.prefs, prefs); renderQuizSetup();

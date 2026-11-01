@@ -14,7 +14,7 @@ Cobblestone is not included because it is not in CS2, so there is no CS2 radar f
 
 Zones are rectangles by default and don't need to cover the whole map. They are layered: **areas** (rooms, corridors, site zones) never overlap each other, and **spots** (boxes, corners, small positions) sit on top. Clicking a spot that lies inside an area counts for both: Default on A Site is a correct answer for *A Site* and for *Default*.
 
-Rounds are 10, 20 or every callout on the map. Callouts you missed last time come back first (up to 40% of a round, most-missed first), the rest of the round favours weak callouts over new ones, and a callout counts as learned after three correct answers in a row. Progress and edits are stored in the browser (localStorage). Two-level maps (Nuke, Vertigo) switch levels automatically during quizzes.
+Rounds are 10, 20 or every callout on the map. Callouts you missed last time come back first (up to 40% of a round, most-missed first), the rest of the round favours weak callouts over new ones, and a callout counts as learned after three correct answers in a row. The quiz setup shows how many callouts on the map are learned, still being learned and new, with a link to reset that map's progress. Progress and edits are stored in the browser (localStorage). Two-level maps (Nuke, Vertigo) switch levels automatically during quizzes.
 
 Links are shareable: `#mirage/find`, `#nuke/explore`, and so on.
 
