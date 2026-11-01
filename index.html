@@ -18,7 +18,11 @@
         <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 1v6M12 17v6M1 12h6M17 12h6"/></svg>
         <span>Callout Trainer</span>
       </a>
-      <nav class="maps" id="mapList" aria-label="Maps"></nav>
+      <div class="maps-wrap" id="mapsWrap">
+        <nav class="maps" id="mapList" aria-label="Maps"></nav>
+        <button type="button" class="maps-more prev" data-dir="-1" tabindex="-1" aria-hidden="true"><svg viewBox="0 0 12 12"><path d="M7.5 2 3.5 6l4 4"/></svg></button>
+        <button type="button" class="maps-more next" data-dir="1" tabindex="-1" aria-hidden="true"><svg viewBox="0 0 12 12"><path d="M4.5 2l4 4-4 4"/></svg></button>
+      </div>
     </header>
 
     <main class="main">
