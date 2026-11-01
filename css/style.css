@@ -272,14 +272,5 @@ button { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   .fb-target { animation: none; }
   .zone { transition: none; }
-  .stage-prompt {
-  display: none;
-  position: absolute; top: 10px; left: 10px; right: 10px;
-  padding: 6px 12px; border-radius: var(--radius-m);
-  background: rgba(20, 25, 32, 0.9); border: 1px solid var(--line);
-  font: 700 26px/1.1 var(--display); color: var(--t-gold);
-  pointer-events: none;
-}
-.stage-prompt:empty { display: none !important; }
-.toast { transition: none; }
+  .toast { transition: none; }
 }
