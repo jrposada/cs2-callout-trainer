@@ -721,7 +721,10 @@
       catch { const f = downloadJson(true); toast(`Couldn't copy to the clipboard, downloaded ${f} instead.`, 4000); }
     };
     $("#dlJson").onclick = () => downloadJson();
-    $("#resetEdits").onclick = () => { delete edits[m.id]; state.vertex = null; saveEdits(); toast("Changes discarded"); };
+    $("#resetEdits").onclick = () => {
+      if (!confirm(`Discard ${n} changed zone${n === 1 ? "" : "s"} on ${m.name}?`)) return;
+      delete edits[m.id]; state.vertex = null; saveEdits(); toast("Changes discarded");
+    };
   }
   // Same layout as data/maps.js, so the export can be pasted straight in.
   const fmtJson = (v) => Array.isArray(v) ? "[" + v.map(fmtJson).join(", ") + "]"
@@ -1036,8 +1039,9 @@
       }
     }
     if (state.mode === "edit" && (e.key === "Delete" || e.key === "Backspace") && state.vertex != null) {
-      e.preventDefault();
-      deleteVertex(selectedCallout(), state.vertex);
+      // Same rule as the Delete point button: never on rectangles or below three points.
+      const c = selectedCallout();
+      if (c && !isRect(c) && ptsOf(c).length > 3) { e.preventDefault(); deleteVertex(c, state.vertex); }
       return;
     }
     if (e.key === "+" || e.key === "=") zoomCenter(1.4);
