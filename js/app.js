@@ -903,10 +903,13 @@
         ${levelChip}
       </div>
       ${r ? resultBlock(r, c) : `<p class="kbd-hint">${TOUCH ? "Tap the radar. Drag to pan, pinch to zoom." : "Click the radar. Drag to pan, scroll to zoom."}</p>`}
-      ${r ? `<div class="row"><button type="button" class="btn primary" id="next">${q.i + 1 < q.items.length ? "Next callout" : "See results"}</button><span class="kbd-hint"><kbd>Enter</kbd></span></div>` : ""}
+      ${r ? `<div class="row"><button type="button" class="btn primary" id="next">${q.i + 1 < q.items.length ? "Next callout" : "See results"}</button>${enterHint()}</div>` : ""}
       <div class="row"><span class="spacer"></span><button type="button" class="btn quiet small" id="quit">End round</button></div>`;
     bindStepButtons();
   }
+
+  // Keyboard hint next to Next; touch screens have no Enter key to point at.
+  const enterHint = () => (TOUCH ? "" : `<span class="kbd-hint"><kbd>Enter</kbd></span>`);
 
   function resultBlock(r, c) {
     const titles = { hit: "Right spot", close: "Close", miss: "Missed" };
@@ -969,8 +972,8 @@
           return `<button type="button" class="${cls}" data-id="${o.id}" ${r ? "disabled" : ""}><kbd>${i + 1}</kbd>${esc(o.name)}</button>`;
         }).join("")}
       </div>
-      ${r ? resultBlock(r, c) : `<p class="kbd-hint">Press <kbd>1</kbd> to <kbd>4</kbd> to answer.</p>`}
-      ${r ? `<div class="row"><button type="button" class="btn primary" id="next">${q.i + 1 < q.items.length ? "Next zone" : "See results"}</button><span class="kbd-hint"><kbd>Enter</kbd></span></div>` : ""}
+      ${r ? resultBlock(r, c) : `<p class="kbd-hint">${TOUCH ? "Tap a name." : "Press <kbd>1</kbd> to <kbd>4</kbd> to answer."}</p>`}
+      ${r ? `<div class="row"><button type="button" class="btn primary" id="next">${q.i + 1 < q.items.length ? "Next zone" : "See results"}</button>${enterHint()}</div>` : ""}
       <div class="row"><span class="spacer"></span><button type="button" class="btn quiet small" id="quit">End round</button></div>`;
     $("#choices").onclick = (e) => { const b = e.target.closest("button[data-id]"); if (b) answerName(b.dataset.id); };
     bindStepButtons();
