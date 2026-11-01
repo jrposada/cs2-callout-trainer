@@ -448,12 +448,14 @@
     const u = unit();
     layerMarkers.querySelectorAll("text").forEach((t) => {
       t.setAttribute("font-size", (t.classList.contains("label-area") ? 14.5 : 13) * u);
+      t.setAttribute("stroke-width", 3.5 * u);
       t.setAttribute("dy", 4.5 * u);
     });
     layerEdit.querySelectorAll("[data-r]").forEach((n) => n.setAttribute("r", Number(n.dataset.r) * u));
     layerFb.querySelectorAll("[data-r]").forEach((n) => n.setAttribute("r", Number(n.dataset.r) * u));
     layerFb.querySelectorAll("text").forEach((t) => {
       t.setAttribute("font-size", 16 * u);
+      t.setAttribute("stroke-width", 3.5 * u);
       t.setAttribute("dx", t.dataset.dx * u);
       t.setAttribute("dy", t.dataset.dy * u);
     });
@@ -489,7 +491,17 @@
         box.appendChild(b);
       }
     }
+    svg.setAttribute("aria-label", `${state.map.name} radar${lv === "lower" ? ", lower level" : ""}`);
+    syncLevelButtons();
     if (refit) fitView();
+  }
+  // During an unfinished round the quiz picks the level, so the buttons say they're off.
+  function syncLevelButtons() {
+    const locked = !!state.quiz && !state.quiz.done;
+    for (const b of document.querySelectorAll("#levels button")) {
+      if (locked) { b.setAttribute("aria-disabled", "true"); b.title = "The quiz picks the level"; }
+      else { b.removeAttribute("aria-disabled"); b.removeAttribute("title"); }
+    }
   }
 
   // ---------- map list ----------
@@ -542,7 +554,7 @@
     prefs.mode = mode;
     store.set(K.prefs, prefs);
     document.body.className = "mode-" + mode;
-    document.querySelectorAll(".modes button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.mode === mode)));
+    document.querySelectorAll(".modes button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
     clearFeedback();
     renderMarkers();
     renderPanel();
@@ -564,7 +576,9 @@
     const q = state.quiz, step = !!q && !q.done && (state.mode === "find" || state.mode === "name");
     document.body.classList.toggle("quiz-step", step);
     document.body.classList.toggle("quiz-answered", step && q.answered);
+    syncLevelButtons();
     $("#stagePrompt").textContent = "";
+    $("#stagePrompt").classList.remove("is-find");
     if (state.mode === "explore") return renderExplore();
     if (state.mode === "edit") return renderEdit();
     return renderQuiz();
@@ -715,10 +729,13 @@
     if (u) u.onclick = () => { delete edits[m.id][sel.id]; state.vertex = null; saveEdits(); };
     $("#copyJson").onclick = async () => {
       try { await navigator.clipboard.writeText(exportJson()); toast("Map data copied"); }
-      catch { downloadJson(); }
+      catch { const f = downloadJson(true); toast(`Couldn't copy to the clipboard, downloaded ${f} instead.`, 4000); }
     };
-    $("#dlJson").onclick = downloadJson;
-    $("#resetEdits").onclick = () => { delete edits[m.id]; state.vertex = null; saveEdits(); toast("Changes discarded"); };
+    $("#dlJson").onclick = () => downloadJson();
+    $("#resetEdits").onclick = () => {
+      if (!confirm(`Discard ${n} changed zone${n === 1 ? "" : "s"} on ${m.name}?`)) return;
+      delete edits[m.id]; state.vertex = null; saveEdits(); toast("Changes discarded");
+    };
   }
   // Same layout as data/maps.js, so the export can be pasted straight in.
   const fmtJson = (v) => Array.isArray(v) ? "[" + v.map(fmtJson).join(", ") + "]"
@@ -759,14 +776,16 @@
     if (t) { t.setAttribute("x", c.x); t.setAttribute("y", c.y); }
     renderHandles();
   }
-  function downloadJson() {
-    const blob = new Blob([exportJson() + "\n"], { type: "application/json" });
+  // The export is a snippet for data/maps.js, not a JSON document, so save it as plain text.
+  function downloadJson(quiet) {
+    const blob = new Blob([exportJson() + "\n"], { type: "text/plain" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `${state.map.id}-callouts.json`;
+    a.download = `${state.map.id}-callouts.txt`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    toast("Downloaded " + a.download);
+    if (!quiet) toast("Downloaded " + a.download);
+    return a.download;
   }
   function commitEdit(c) {
     if (!c) return;
@@ -792,7 +811,10 @@
   // ----- Quizzes (Find it / Name it) -----
   function renderQuiz() {
     const q = state.quiz;
-    $("#stagePrompt").textContent = state.mode === "find" && q && !q.done && !q.answered ? current().name : "";
+    // Find it: the target name sits on the radar until you answer (a pill on wide screens).
+    const sp = $("#stagePrompt");
+    sp.textContent = state.mode === "find" && q && !q.done && !q.answered ? current().name : "";
+    sp.classList.toggle("is-find", !!sp.textContent);
     if (!q) return renderQuizSetup();
     if (q.done) return renderQuizSummary();
     return state.mode === "find" ? renderFindStep() : renderNameStep();
@@ -881,10 +903,13 @@
         ${levelChip}
       </div>
       ${r ? resultBlock(r, c) : `<p class="kbd-hint">${TOUCH ? "Tap the radar. Drag to pan, pinch to zoom." : "Click the radar. Drag to pan, scroll to zoom."}</p>`}
-      ${r ? `<div class="row"><button type="button" class="btn primary" id="next">${q.i + 1 < q.items.length ? "Next callout" : "See results"}</button><span class="kbd-hint"><kbd>Enter</kbd></span></div>` : ""}
+      ${r ? `<div class="row"><button type="button" class="btn primary" id="next">${q.i + 1 < q.items.length ? "Next callout" : "See results"}</button>${enterHint()}</div>` : ""}
       <div class="row"><span class="spacer"></span><button type="button" class="btn quiet small" id="quit">End round</button></div>`;
     bindStepButtons();
   }
+
+  // Keyboard hint next to Next; touch screens have no Enter key to point at.
+  const enterHint = () => (TOUCH ? "" : `<span class="kbd-hint"><kbd>Enter</kbd></span>`);
 
   function resultBlock(r, c) {
     const titles = { hit: "Right spot", close: "Close", miss: "Missed" };
@@ -947,8 +972,8 @@
           return `<button type="button" class="${cls}" data-id="${o.id}" ${r ? "disabled" : ""}><kbd>${i + 1}</kbd>${esc(o.name)}</button>`;
         }).join("")}
       </div>
-      ${r ? resultBlock(r, c) : `<p class="kbd-hint">Press <kbd>1</kbd> to <kbd>4</kbd> to answer.</p>`}
-      ${r ? `<div class="row"><button type="button" class="btn primary" id="next">${q.i + 1 < q.items.length ? "Next zone" : "See results"}</button><span class="kbd-hint"><kbd>Enter</kbd></span></div>` : ""}
+      ${r ? resultBlock(r, c) : `<p class="kbd-hint">${TOUCH ? "Tap a name." : "Press <kbd>1</kbd> to <kbd>4</kbd> to answer."}</p>`}
+      ${r ? `<div class="row"><button type="button" class="btn primary" id="next">${q.i + 1 < q.items.length ? "Next zone" : "See results"}</button>${enterHint()}</div>` : ""}
       <div class="row"><span class="spacer"></span><button type="button" class="btn quiet small" id="quit">End round</button></div>`;
     $("#choices").onclick = (e) => { const b = e.target.closest("button[data-id]"); if (b) answerName(b.dataset.id); };
     bindStepButtons();
@@ -1028,8 +1053,9 @@
       }
     }
     if (state.mode === "edit" && (e.key === "Delete" || e.key === "Backspace") && state.vertex != null) {
-      e.preventDefault();
-      deleteVertex(selectedCallout(), state.vertex);
+      // Same rule as the Delete point button: never on rectangles or below three points.
+      const c = selectedCallout();
+      if (c && !isRect(c) && ptsOf(c).length > 3) { e.preventDefault(); deleteVertex(c, state.vertex); }
       return;
     }
     if (e.key === "+" || e.key === "=") zoomCenter(1.4);
