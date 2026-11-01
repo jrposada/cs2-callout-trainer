@@ -153,12 +153,24 @@
   }
 
   let toastTimer;
-  function toast(msg) {
+  function toast(msg, ms = 1800) {
     const t = $("#toast");
     t.textContent = msg;
     t.classList.add("show");
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => t.classList.remove("show"), 1800);
+    toastTimer = setTimeout(() => t.classList.remove("show"), ms);
+  }
+
+  // Leaving an answered, unfinished round takes a second identical action within LEAVE_MS.
+  const LEAVE_MS = 3000;
+  let leaveAsk = null;
+  function canLeave(key) {
+    const q = state.quiz;
+    if (!q || q.done || !q.results.length) return true;
+    if (leaveAsk && leaveAsk.key === key && Date.now() - leaveAsk.t < LEAVE_MS) { leaveAsk = null; return true; }
+    leaveAsk = { key, t: Date.now() };
+    toast("Round in progress \u2014 click again to leave", LEAVE_MS);
+    return false;
   }
 
   // ---------- progress ----------
@@ -482,7 +494,7 @@
       const pct = Math.round(mapMastery(m) * 100);
       b.title = `${m.name}: ${pct}% learned`;
       b.innerHTML = `${esc(m.name)}<span class="mastery"><i style="width:${pct}%"></i></span>`;
-      b.onclick = () => selectMap(m.id);
+      b.onclick = () => { if (m.id !== state.map.id && canLeave("map:" + m.id)) selectMap(m.id); };
       nav.appendChild(b);
     }
   }
@@ -517,7 +529,10 @@
     renderPanel();
     updateHash();
   }
-  document.querySelectorAll(".modes button").forEach((b) => (b.onclick = () => setMode(b.dataset.mode)));
+  document.querySelectorAll(".modes button").forEach((b) => (b.onclick = () => {
+    const mode = b.dataset.mode;
+    if (mode !== state.mode && canLeave("mode:" + mode)) setMode(mode);
+  }));
 
   function updateHash() {
     if (!state.map) return;
@@ -987,8 +1002,12 @@
   }
   window.addEventListener("hashchange", () => {
     const [hMap, hMode] = location.hash.replace(/^#/, "").split("/");
-    if (state.map && hMap && hMap !== state.map.id && MAPS.some((m) => m.id === hMap)) selectMap(hMap);
-    if (hMode && hMode !== state.mode && ["explore", "find", "name", "edit"].includes(hMode)) setMode(hMode);
+    const newMap = state.map && hMap && hMap !== state.map.id && MAPS.some((m) => m.id === hMap);
+    const newMode = hMode && hMode !== state.mode && ["explore", "find", "name", "edit"].includes(hMode);
+    if (!newMap && !newMode) return;
+    if (!canLeave("hash:" + location.hash)) return updateHash(); // restore the hash of the round we kept
+    if (newMap) selectMap(hMap);
+    if (newMode) setMode(hMode);
   });
   boot();
 })();
