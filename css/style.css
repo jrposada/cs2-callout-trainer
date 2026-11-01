@@ -151,6 +151,7 @@ button { cursor: pointer; }
 .modes button:hover { color: var(--text); }
 .modes button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--t-gold); }
 .panel-body { flex: 1; min-height: 0; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+.panel-body > * { flex-shrink: 0; }
 
 .lede { margin: 0; color: var(--muted); max-width: 46ch; }
 .lede strong { color: var(--text); font-weight: 600; }
