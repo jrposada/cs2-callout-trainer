@@ -23,16 +23,18 @@
       ...m,
       callouts: m.callouts.map((c) => {
         const e = edits[m.id] && edits[m.id][c.id];
-        return e ? { ...c, x: e.x, y: e.y, edited: true } : { ...c };
+        if (!e) return { ...c };
+        const out = { ...c, edited: true };
+        if (e.x != null) { out.x = e.x; out.y = e.y; }
+        if (e.poly) out.poly = e.poly;
+        return out;
       }),
     }));
   }
   let MAPS = buildMaps();
 
   // ---------- constants ----------
-  const HIT_PX = 34;       // radar px; a click this close always counts
-  const NEAREST_PX = 80;   // ...or within this and nearer to the target than to any other callout
-  const CLOSE_PX = 95;
+  const CLOSE_PX = 24;     // radar px outside a zone that still counts as "close"
   const INCH_TO_M = 0.0254; // 1 Hammer unit ~ 1 inch
   const TOUCH = window.matchMedia && matchMedia("(pointer: coarse)").matches;
   const MASTER_STREAK = 3;
@@ -41,7 +43,9 @@
   const $ = (s, el = document) => el.querySelector(s);
   const svg = $("#radar");
   const img = $("#radarImg");
+  const layerZones = $("#layerZones");
   const layerMarkers = $("#layerMarkers");
+  const layerEdit = $("#layerEdit");
   const layerFb = $("#layerFeedback");
   const panel = $("#panelBody");
   const stage = $("#stage");
@@ -53,6 +57,8 @@
     mode: "explore",
     view: [0, 0, 1024, 1024],
     selected: null,
+    vertex: null,   // index of the active polygon point in Edit
+    hover: null,
     search: "",
     quiz: null,
   };
@@ -69,6 +75,71 @@
   };
   const levelName = (lv) => (lv === "lower" ? "Lower level" : "Upper level");
   const meters = (px) => Math.max(1, Math.round(px * state.map.scale * INCH_TO_M));
+
+  // ---------- zone geometry ----------
+  // A callout's zone is c.poly = [x1, y1, x2, y2, ...] in radar px. Without one, a small circle stands in.
+  const ptsCache = new WeakMap();
+  function ptsOf(c) {
+    const key = c.poly || c;
+    let p = ptsCache.get(key);
+    if (p) return p;
+    p = [];
+    if (c.poly && c.poly.length >= 6) {
+      for (let i = 0; i < c.poly.length; i += 2) p.push({ x: c.poly[i], y: c.poly[i + 1] });
+    } else {
+      for (let k = 0; k < 12; k++) p.push({ x: c.x + 18 * Math.cos((k * Math.PI) / 6), y: c.y + 18 * Math.sin((k * Math.PI) / 6) });
+    }
+    if (c.poly) ptsCache.set(key, p);
+    return p;
+  }
+  const ptsStr = (c) => ptsOf(c).map((p) => `${p.x},${p.y}`).join(" ");
+  function pointInPoly(p, pts) {
+    let inside = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const a = pts[i], b = pts[j];
+      if ((a.y > p.y) !== (b.y > p.y) && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+    }
+    return inside;
+  }
+  function nearestOnSeg(p, a, b) {
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const L = dx * dx + dy * dy;
+    const t = L ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / L)) : 0;
+    const q = { x: a.x + t * dx, y: a.y + t * dy };
+    return { d: dist(p, q), x: q.x, y: q.y };
+  }
+  // Distance from p to the zone's edge, plus the nearest edge point and the edge index.
+  function edgeNearest(p, pts) {
+    let best = { d: Infinity, x: p.x, y: p.y, i: 0 };
+    for (let i = 0; i < pts.length; i++) {
+      const r = nearestOnSeg(p, pts[i], pts[(i + 1) % pts.length]);
+      if (r.d < best.d) best = { ...r, i };
+    }
+    return best;
+  }
+  function polyArea(pts) {
+    let s = 0;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) s += (pts[j].x + pts[i].x) * (pts[j].y - pts[i].y);
+    return Math.abs(s / 2);
+  }
+  // Drawing order: big areas underneath, spots on top, larger before smaller.
+  function zOrdered() {
+    return levelCallouts()
+      .map((c) => ({ c, a: polyArea(ptsOf(c)) }))
+      .sort((u, v) => (!!v.c.area - !!u.c.area) || v.a - u.a)
+      .map((u) => u.c);
+  }
+  // The topmost zone under a point (the smallest one that contains it).
+  function calloutAt(p) {
+    let best = null, bestA = Infinity;
+    for (const c of levelCallouts()) {
+      const pts = ptsOf(c);
+      if (!pointInPoly(p, pts)) continue;
+      const a = polyArea(pts) * (c.area ? 1000 : 1);
+      if (a < bestA) { best = c; bestA = a; }
+    }
+    return best;
+  }
 
   let toastTimer;
   function toast(msg) {
@@ -142,8 +213,11 @@
     setView([p.x - w / 2, p.y - h / 2, w, h]);
   }
   function ensureVisible(p) {
-    const [x, y, w, h] = state.view;
-    const m = Math.min(w, h) * 0.12;
+    // The svg letterboxes the viewBox, so the visible area can be wider or taller than it.
+    const r = svg.getBoundingClientRect(), u = unit();
+    const w = r.width * u || state.view[2], h = r.height * u || state.view[3];
+    const x = state.view[0] + state.view[2] / 2 - w / 2, y = state.view[1] + state.view[3] / 2 - h / 2;
+    const m = Math.min(w, h) * 0.03;
     if (p.x < x + m || p.x > x + w - m || p.y < y + m || p.y > y + h - m) centerOn(p);
   }
   function clientToSvg(cx, cy, ctm) {
@@ -152,7 +226,7 @@
     return pt.matrixTransform((ctm || svg.getScreenCTM()).inverse());
   }
 
-  // pointer handling: pan, pinch, click, drag-marker
+  // pointer handling: pan, pinch, click, drag edit handles
   const pointers = new Map();
   let gesture = null;
   svg.addEventListener("pointerdown", (e) => {
@@ -160,15 +234,24 @@
     svg.setPointerCapture(e.pointerId);
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.size === 1) {
-      const markerEl = e.target.closest && e.target.closest(".marker");
+      const handle = state.mode === "edit" && e.target.closest && e.target.closest(".vertex, .anchor");
       const ctm = svg.getScreenCTM();
       gesture = {
         type: "maybe", start: { x: e.clientX, y: e.clientY }, ctm, view0: state.view.slice(),
-        p0: clientToSvg(e.clientX, e.clientY, ctm), marker: markerEl ? markerEl.dataset.id : null,
+        p0: clientToSvg(e.clientX, e.clientY, ctm),
       };
-      if (state.mode === "edit" && gesture.marker) {
-        gesture.type = "drag";
-        selectCallout(gesture.marker, false);
+      if (handle) {
+        const c = selectedCallout();
+        if (handle.classList.contains("vertex")) {
+          gesture.type = "vertex";
+          gesture.i = Number(handle.dataset.i);
+          state.vertex = gesture.i;
+          c.poly = (c.poly && c.poly.length >= 6) ? c.poly.slice() : ptsOf(c).flatMap((q) => [Math.round(q.x), Math.round(q.y)]);
+          renderHandles();
+        } else {
+          gesture.type = "anchor";
+        }
+        gesture.moved = false;
       }
     } else if (pointers.size === 2) {
       const [a, b] = [...pointers.values()];
@@ -177,7 +260,10 @@
     }
   });
   svg.addEventListener("pointermove", (e) => {
-    if (!pointers.has(e.pointerId) || !gesture) return;
+    if (!pointers.has(e.pointerId) || !gesture) {
+      if (e.pointerType === "mouse") hoverAt(clientToSvg(e.clientX, e.clientY));
+      return;
+    }
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (gesture.type === "pinch" && pointers.size === 2) {
       const [a, b] = [...pointers.values()];
@@ -198,9 +284,15 @@
       const p = clientToSvg(e.clientX, e.clientY, gesture.ctm);
       const [x, y, w, h] = gesture.view0;
       setView([x - (p.x - gesture.p0.x), y - (p.y - gesture.p0.y), w, h]);
-    } else if (gesture.type === "drag") {
+    } else if (gesture.type === "vertex" || gesture.type === "anchor") {
       const p = clientToSvg(e.clientX, e.clientY);
-      moveCallout(gesture.marker, Math.round(p.x), Math.round(p.y), false);
+      const x = Math.round(Math.max(0, Math.min(1024, p.x))), y = Math.round(Math.max(0, Math.min(1024, p.y)));
+      const c = selectedCallout();
+      if (!c) return;
+      gesture.moved = true;
+      if (gesture.type === "vertex") { c.poly[gesture.i * 2] = x; c.poly[gesture.i * 2 + 1] = y; }
+      else { c.x = x; c.y = y; }
+      updateZoneDom(c);
     }
   });
   function endPointer(e) {
@@ -209,16 +301,27 @@
     if (!gesture) return;
     if (gesture.type === "maybe" && pointers.size === 0) {
       const p = clientToSvg(e.clientX, e.clientY);
-      onMapClick(p, gesture.marker);
-    } else if (gesture.type === "drag") {
-      const p = clientToSvg(e.clientX, e.clientY);
-      moveCallout(gesture.marker, Math.round(p.x), Math.round(p.y), true);
+      onMapClick(p);
+    } else if (gesture.type === "vertex" || gesture.type === "anchor") {
+      if (gesture.moved) commitEdit(selectedCallout());
+      else renderPanel();
     }
     if (pointers.size === 0) { gesture = null; svg.classList.remove("is-panning"); }
     else if (gesture.type === "pinch") { gesture = null; }
   }
   svg.addEventListener("pointerup", endPointer);
   svg.addEventListener("pointercancel", endPointer);
+  svg.addEventListener("pointerleave", () => setHover(null));
+  // Edit: double-click near the selected zone's edge to add a point there.
+  svg.addEventListener("dblclick", (e) => {
+    if (state.mode !== "edit") return;
+    const c = selectedCallout();
+    if (!c) return;
+    const p = clientToSvg(e.clientX, e.clientY);
+    const hit = edgeNearest(p, ptsOf(c));
+    if (hit.d > 14 * unit()) return;
+    insertVertex(c, hit.i, Math.round(hit.x), Math.round(hit.y));
+  });
   svg.addEventListener("wheel", (e) => {
     e.preventDefault();
     const p = clientToSvg(e.clientX, e.clientY);
@@ -233,35 +336,64 @@
   // ---------- rendering the radar ----------
   function levelCallouts() { return state.map.callouts.filter((c) => c.level === state.level); }
 
+  // Zones and their names (Explore and Edit). Quizzes draw only feedback.
   function renderMarkers() {
+    layerZones.textContent = "";
     layerMarkers.textContent = "";
+    layerEdit.textContent = "";
+    state.hover = null;
     const showAll = state.mode === "explore" || state.mode === "edit";
     svg.classList.toggle("show-labels", state.mode === "edit" || (state.mode === "explore" && prefs.labels));
     if (!showAll) return;
     const q = state.search.trim().toLowerCase();
-    for (const c of levelCallouts()) {
-      const g = el("g", { class: "marker", "data-id": c.id }, layerMarkers);
-      el("circle", { class: "hit", cx: c.x, cy: c.y }, g);
-      el("circle", { class: "dot", cx: c.x, cy: c.y }, g);
-      const t = el("text", { x: c.x, y: c.y }, g);
-      t.textContent = c.name;
-      if (c.id === state.selected) g.classList.add("is-active");
-      if (q && !matches(c, q)) g.classList.add("is-dim");
+    const order = zOrdered();
+    for (const c of order) {
+      const z = el("polygon", { class: "zone " + (c.area ? "zone-area" : "zone-spot"), points: ptsStr(c), "data-id": c.id }, layerZones);
+      if (c.id === state.selected) z.classList.add("is-active");
+      if (q && !matches(c, q)) z.classList.add("is-dim");
     }
+    for (const c of order) {
+      const t = el("text", { class: "label" + (c.area ? " label-area" : ""), x: c.x, y: c.y, "data-id": c.id }, layerMarkers);
+      t.textContent = c.name;
+      if (c.id === state.selected) t.classList.add("is-active");
+      if (q && !matches(c, q)) t.classList.add("is-dim");
+    }
+    if (state.mode === "edit") renderHandles();
     rescaleMarks();
+  }
+  function selectedCallout() { return state.map && state.map.callouts.find((c) => c.id === state.selected); }
+  // Corner points and the name handle of the selected zone (Edit).
+  function renderHandles() {
+    layerEdit.textContent = "";
+    const c = selectedCallout();
+    if (!c || c.level !== state.level) return;
+    ptsOf(c).forEach((p, i) => {
+      el("circle", { class: "vertex" + (i === state.vertex ? " is-active" : ""), cx: p.x, cy: p.y, "data-i": i, "data-r": i === state.vertex ? 6.5 : 5 }, layerEdit);
+    });
+    el("circle", { class: "anchor", cx: c.x, cy: c.y, "data-r": 7 }, layerEdit);
+    rescaleMarks();
+  }
+  function setHover(id) {
+    if (state.hover === id) return;
+    for (const n of svg.querySelectorAll(".is-hover")) n.classList.remove("is-hover");
+    state.hover = id;
+    if (!id) return;
+    for (const n of svg.querySelectorAll(`[data-id="${CSS.escape(id)}"]`)) n.classList.add("is-hover");
+  }
+  let hoverFrame = 0;
+  function hoverAt(p) {
+    if (state.mode !== "explore" && state.mode !== "edit") return;
+    cancelAnimationFrame(hoverFrame);
+    hoverFrame = requestAnimationFrame(() => { const c = calloutAt(p); setHover(c ? c.id : null); });
   }
   function rescaleMarks() {
     if (!state.map) return;
     const u = unit();
-    layerMarkers.querySelectorAll(".marker").forEach((g) => {
-      const [hit, dot, text] = g.children;
-      const active = g.classList.contains("is-active");
-      hit.setAttribute("r", 13 * u);
-      dot.setAttribute("r", (active ? 7 : 5) * u);
-      text.setAttribute("font-size", 14 * u);
-      text.setAttribute("dx", 9 * u);
-      text.setAttribute("dy", 4.5 * u);
+    layerMarkers.querySelectorAll("text").forEach((t) => {
+      t.setAttribute("font-size", (t.classList.contains("label-area") ? 14.5 : 13) * u);
+      t.setAttribute("dy", 4.5 * u);
     });
+    layerEdit.querySelectorAll("[data-r]").forEach((n) => n.setAttribute("r", Number(n.dataset.r) * u));
     layerFb.querySelectorAll("[data-r]").forEach((n) => n.setAttribute("r", Number(n.dataset.r) * u));
     layerFb.querySelectorAll("text").forEach((t) => {
       t.setAttribute("font-size", 16 * u);
@@ -270,6 +402,13 @@
     });
   }
   function fbCircle(cls, p, r) { return el("circle", { class: cls, cx: p.x, cy: p.y, "data-r": r }, layerFb); }
+  function fbPoly(cls, c) { return el("polygon", { class: cls, points: ptsStr(c) }, layerFb); }
+  // Centre of a zone's bounding box, for keeping it in view.
+  function zoneCenter(c) {
+    const pts = ptsOf(c);
+    const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+    return { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
+  }
   function fbLabel(p, text, dx = 12, dy = -10) {
     const t = el("text", { class: "fb-label", x: p.x, y: p.y, "data-dx": dx, "data-dy": dy }, layerFb);
     t.textContent = text;
@@ -359,7 +498,7 @@
   }
 
   function footer() {
-    return `<div class="foot">Callout names follow <a href="https://totalcsgo.com/callouts" target="_blank" rel="noopener">Total CS</a>. Radar images come from the CS2 game files. Positions were placed by hand; if one is off, move it in Edit.</div>`;
+    return `<div class="foot">Callout names follow <a href="https://totalcsgo.com/callouts" target="_blank" rel="noopener">Total CS</a>. Radar images come from the CS2 game files. Zones were generated from the radar and placed by hand; if one is off, fix it in Edit.</div>`;
   }
 
   function matches(c, q) {
@@ -384,7 +523,7 @@
     const list = m.callouts.slice().sort((a, b) => a.name.localeCompare(b.name)).filter((c) => !q || matches(c, q));
     const sel = m.callouts.find((c) => c.id === state.selected);
     panel.innerHTML = `
-      <p class="lede">${m.callouts.length} callouts on ${esc(m.name)}. Tap a dot or a name to see where it is and what it means.</p>
+      <p class="lede">${m.callouts.length} callouts on ${esc(m.name)}. Tap a zone or a name to see where it is and what it means.</p>
       <div class="row">
         <label class="switch"><input type="checkbox" id="labelsToggle" ${prefs.labels ? "checked" : ""}> Show all names on the map</label>
       </div>
@@ -413,6 +552,7 @@
   function selectCallout(id, center) {
     const c = state.map.callouts.find((x) => x.id === id);
     if (!c) return;
+    if (state.selected !== id) state.vertex = null;
     state.selected = id;
     if (c.level !== state.level) setLevel(c.level);
     renderMarkers();
@@ -425,38 +565,91 @@
   // ----- Edit -----
   function renderEdit() {
     const m = state.map;
-    const sel = m.callouts.find((c) => c.id === state.selected);
+    const sel = selectedCallout();
     const n = edits[m.id] ? Object.keys(edits[m.id]).length : 0;
+    const npts = sel ? ptsOf(sel).length : 0;
     panel.innerHTML = `
-      <p class="lede">Drag any dot to where the callout really is. Changes save in this browser and are used by the quizzes straight away. Export them to update the site for everyone.</p>
+      <p class="lede">Click a zone to select it. Drag its corner points to reshape it and the round handle to move its name. ${TOUCH ? "" : "Double-click an edge to add a point. "}Changes save in this browser and are used by the quizzes straight away. Export them to update the site for everyone.</p>
       ${sel ? `${calloutCard(sel)}
-        <div class="row"><span class="field-label">Position ${Math.round(sel.x)}, ${Math.round(sel.y)}</span><span class="spacer"></span>
-        ${sel.edited ? `<button type="button" class="btn small quiet" id="undoOne">Undo move</button>` : ""}</div>`
-        : `<div class="card"><p class="desc" style="margin:0">Pick a dot on the map to select it.</p></div>`}
+        <div class="row">
+          <span class="field-label">${sel.area ? "Area" : "Spot"}, ${npts} points</span><span class="spacer"></span>
+          <button type="button" class="btn small" id="addPt">Add point</button>
+          <button type="button" class="btn small" id="delPt" ${state.vertex == null || npts <= 3 ? "disabled" : ""}>Delete point</button>
+        </div>
+        ${sel.edited ? `<div class="row"><span class="spacer"></span><button type="button" class="btn small quiet" id="undoOne">Undo changes to ${esc(sel.name)}</button></div>` : ""}`
+        : `<div class="card"><p class="desc" style="margin:0">Pick a zone on the map to select it.</p></div>`}
       <div class="row">
-        <span class="field-label">${n ? `${n} moved on ${esc(m.name)}` : `No moves on ${esc(m.name)} yet`}</span>
+        <span class="field-label">${n ? `${n} changed on ${esc(m.name)}` : `No changes on ${esc(m.name)} yet`}</span>
       </div>
       <div class="row">
         <button type="button" class="btn primary" id="copyJson">Copy map data</button>
         <button type="button" class="btn" id="dlJson">Download</button>
         <span class="spacer"></span>
-        <button type="button" class="btn quiet" id="resetEdits" ${n ? "" : "disabled"}>Discard moves</button>
+        <button type="button" class="btn quiet" id="resetEdits" ${n ? "" : "disabled"}>Discard changes</button>
       </div>
       <p class="lede">The copied data replaces the <strong>callouts</strong> list for ${esc(m.name)} in <code>data/maps.js</code>.</p>
       ${footer()}`;
+    if (sel) {
+      $("#addPt").onclick = () => {
+        const pts = ptsOf(sel);
+        // New point halfway along the edge after the active point (or the longest edge).
+        let i = state.vertex;
+        if (i == null) {
+          let best = -1;
+          pts.forEach((p, k) => { const d = dist(p, pts[(k + 1) % pts.length]); if (d > best) { best = d; i = k; } });
+        }
+        const a = pts[i], b = pts[(i + 1) % pts.length];
+        insertVertex(sel, i, Math.round((a.x + b.x) / 2), Math.round((a.y + b.y) / 2));
+      };
+      $("#delPt").onclick = () => deleteVertex(sel, state.vertex);
+    }
     const u = $("#undoOne");
-    if (u) u.onclick = () => { delete edits[m.id][sel.id]; saveEdits(); };
+    if (u) u.onclick = () => { delete edits[m.id][sel.id]; state.vertex = null; saveEdits(); };
     $("#copyJson").onclick = async () => {
       try { await navigator.clipboard.writeText(exportJson()); toast("Map data copied"); }
       catch { downloadJson(); }
     };
     $("#dlJson").onclick = downloadJson;
-    $("#resetEdits").onclick = () => { delete edits[m.id]; saveEdits(); toast("Moves discarded"); };
+    $("#resetEdits").onclick = () => { delete edits[m.id]; state.vertex = null; saveEdits(); toast("Changes discarded"); };
   }
+  // Same layout as data/maps.js, so the export can be pasted straight in.
+  const fmtJson = (v) => Array.isArray(v) ? "[" + v.map(fmtJson).join(", ") + "]"
+    : v && typeof v === "object" ? "{" + Object.entries(v).map(([k, x]) => JSON.stringify(k) + ": " + fmtJson(x)).join(", ") + "}"
+    : JSON.stringify(v);
   function exportJson() {
     const m = state.map;
-    const rows = m.callouts.map(({ edited, ...c }) => "      " + JSON.stringify({ ...c, x: Math.round(c.x), y: Math.round(c.y) }));
+    const rows = m.callouts.map(({ edited, ...c }) => {
+      const o = { id: c.id, name: c.name, alt: c.alt, desc: c.desc, x: Math.round(c.x), y: Math.round(c.y), level: c.level };
+      if (c.area) o.area = true;
+      if (c.poly) o.poly = c.poly.map((v) => Math.round(v));
+      return "      " + fmtJson(o);
+    });
     return `"callouts": [\n${rows.join(",\n")}\n    ]`;
+  }
+  function insertVertex(c, afterIndex, x, y) {
+    const flat = ptsOf(c).flatMap((p) => [Math.round(p.x), Math.round(p.y)]);
+    flat.splice((afterIndex + 1) * 2, 0, x, y);
+    c.poly = flat;
+    state.vertex = afterIndex + 1;
+    commitEdit(c);
+  }
+  function deleteVertex(c, i) {
+    const pts = ptsOf(c);
+    if (i == null || pts.length <= 3) return;
+    const flat = pts.flatMap((p) => [Math.round(p.x), Math.round(p.y)]);
+    flat.splice(i * 2, 2);
+    c.poly = flat;
+    state.vertex = null;
+    commitEdit(c);
+  }
+  // Redraw one zone while it is being dragged, without rebuilding everything.
+  function updateZoneDom(c) {
+    const id = CSS.escape(c.id);
+    const z = layerZones.querySelector(`.zone[data-id="${id}"]`);
+    if (z) z.setAttribute("points", ptsStr(c));
+    const t = layerMarkers.querySelector(`text[data-id="${id}"]`);
+    if (t) { t.setAttribute("x", c.x); t.setAttribute("y", c.y); }
+    renderHandles();
   }
   function downloadJson() {
     const blob = new Blob([exportJson() + "\n"], { type: "application/json" });
@@ -467,21 +660,13 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     toast("Downloaded " + a.download);
   }
-  function moveCallout(id, x, y, commit) {
-    const c = state.map.callouts.find((k) => k.id === id);
+  function commitEdit(c) {
     if (!c) return;
-    c.x = Math.max(0, Math.min(1024, x));
-    c.y = Math.max(0, Math.min(1024, y));
-    const g = layerMarkers.querySelector(`.marker[data-id="${CSS.escape(id)}"]`);
-    if (g) {
-      g.querySelectorAll("circle").forEach((ci) => { ci.setAttribute("cx", c.x); ci.setAttribute("cy", c.y); });
-      const t = g.querySelector("text"); t.setAttribute("x", c.x); t.setAttribute("y", c.y);
-    }
-    if (commit) {
-      edits[state.map.id] = edits[state.map.id] || {};
-      edits[state.map.id][id] = { x: c.x, y: c.y };
-      saveEdits();
-    }
+    edits[state.map.id] = edits[state.map.id] || {};
+    const e = { x: c.x, y: c.y };
+    if (c.poly) e.poly = c.poly.slice();
+    edits[state.map.id][c.id] = e;
+    saveEdits();
   }
   function saveEdits() {
     for (const k in edits) if (!Object.keys(edits[k]).length) delete edits[k];
@@ -512,8 +697,8 @@
     const sizes = [10, 20, 0];
     panel.innerHTML = `
       <p class="lede">${isFind
-        ? `You get a callout name. <strong>Click where it is</strong> on the radar. Within a few metres counts.`
-        : `A spot pulses on the radar. <strong>Pick its name</strong> from four nearby callouts.`}
+        ? `You get a callout name. <strong>Click anywhere inside its zone</strong> on the radar.`
+        : `A zone lights up on the radar. <strong>Pick its name</strong> from four nearby callouts.`}
         Callouts you keep missing come up more often.</p>
       <div class="row"><span class="field-label">Questions</span>
         <div class="seg" id="roundSize">${sizes.map((s) => `<button type="button" data-n="${s}" aria-pressed="${prefs.round === s}">${s || "All " + m.callouts.length}</button>`).join("")}</div>
@@ -550,9 +735,8 @@
     if (c.level !== state.level) setLevel(c.level);
     if (state.mode === "name") {
       q.options = buildOptions(c);
-      fbCircle("target-pulse", c, 10);
-      fbCircle("target-ring", c, 10);
-      ensureVisible(c);
+      fbPoly("fb-target", c);
+      ensureVisible(zoneCenter(c));
       rescaleMarks();
     }
     renderPanel();
@@ -598,43 +782,43 @@
     const titles = { hit: "Right spot", close: "Close", miss: "Missed" };
     let detail;
     if (state.mode === "find") {
-      detail = `You were <strong>${meters(r.d)} m</strong> away.`;
-      if (r.kind !== "hit" && r.near && r.near.id !== c.id) detail += ` You clicked nearest to <strong>${esc(r.near.name)}</strong>.`;
+      if (r.kind === "hit") {
+        detail = r.near && r.near.id !== c.id ? `You clicked <strong>${esc(r.near.name)}</strong>, which is inside it.` : "";
+      } else {
+        detail = `You were <strong>${meters(r.d)} m</strong> outside it.`;
+        if (r.near && r.near.id !== c.id) detail += ` You clicked <strong>${esc(r.near.name)}</strong>.`;
+      }
     } else {
       detail = r.kind === "hit" ? "" : `That spot is <strong>${esc(c.name)}</strong>.`;
     }
     return `<div class="result ${r.kind}"><h4>${titles[r.kind]}</h4>${detail ? `<p>${detail}</p>` : ""}<p>${esc(c.desc)}</p></div>`;
   }
 
-  function onMapClick(p, markerId) {
-    if (state.mode === "explore") {
-      if (markerId) selectCallout(markerId, false);
-      else if (state.selected) { state.selected = null; renderMarkers(); renderPanel(); }
-      return;
-    }
-    if (state.mode === "edit") {
-      if (markerId) selectCallout(markerId, false);
+  function onMapClick(p) {
+    if (state.mode === "explore" || state.mode === "edit") {
+      const hit = calloutAt(p);
+      if (hit) selectCallout(hit.id, false);
+      else if (state.selected) { state.selected = null; state.vertex = null; renderMarkers(); renderPanel(); }
       return;
     }
     if (state.mode !== "find" || !state.quiz || state.quiz.done || state.quiz.answered) return;
     const c = current();
-    const d = dist(p, c);
-    let near = null, best = Infinity;
-    for (const o of levelCallouts()) { const od = dist(p, o); if (od < best) { best = od; near = o; } }
-    const nearestIsTarget = near && (near.id === c.id || near.name === c.name);
-    const kind = d <= HIT_PX || (nearestIsTarget && d <= NEAREST_PX) ? "hit" : d <= CLOSE_PX ? "close" : "miss";
+    const pts = ptsOf(c);
+    const inside = pointInPoly(p, pts);
+    const edge = inside ? { d: 0, x: p.x, y: p.y } : edgeNearest(p, pts);
+    const near = calloutAt(p);
+    const kind = inside || (near && near.name === c.name) ? "hit" : edge.d <= CLOSE_PX ? "close" : "miss";
     const q = state.quiz;
     q.answered = true;
-    q.results[q.i] = { kind, d, near, id: c.id };
+    q.results[q.i] = { kind, d: kind === "hit" ? 0 : edge.d, near, id: c.id };
     score(state.map.id, c.id, kind === "hit");
     // feedback on the radar
-    el("line", { class: "fb-line", x1: p.x, y1: p.y, x2: c.x, y2: c.y }, layerFb);
-    el("circle", { class: "fb-zone", cx: c.x, cy: c.y, r: HIT_PX }, layerFb);
-    fbCircle("fb-true", c, 9);
+    fbPoly("fb-answer", c);
+    if (!inside) el("line", { class: "fb-line", x1: p.x, y1: p.y, x2: edge.x, y2: edge.y }, layerFb);
     fbCircle("fb-guess" + (kind === "hit" ? " hit" : ""), p, 5);
-    fbLabel(c, c.name);
+    fbLabel(c, c.name, 0, 4.5);
     rescaleMarks();
-    ensureVisible(c);
+    ensureVisible(zoneCenter(c));
     renderMapList();
     renderPanel();
   }
@@ -645,7 +829,7 @@
     panel.innerHTML = `
       ${progressBar()}
       <div class="prompt">
-        <p class="ask">Question ${q.i + 1} of ${q.items.length}. What is the pulsing spot called?</p>
+        <p class="ask">Question ${q.i + 1} of ${q.items.length}. What is the highlighted zone called?</p>
         ${state.map.levels.length > 1 ? `<p class="hint"><span class="chip">${esc(levelName(c.level))}</span></p>` : ""}
       </div>
       <div class="choices" id="choices">
@@ -656,7 +840,7 @@
         }).join("")}
       </div>
       ${r ? resultBlock(r, c) : `<p class="kbd-hint">Press <kbd>1</kbd> to <kbd>4</kbd> to answer.</p>`}
-      ${r ? `<div class="row"><button type="button" class="btn primary" id="next">${q.i + 1 < q.items.length ? "Next spot" : "See results"}</button><span class="kbd-hint"><kbd>Enter</kbd></span></div>` : ""}
+      ${r ? `<div class="row"><button type="button" class="btn primary" id="next">${q.i + 1 < q.items.length ? "Next zone" : "See results"}</button><span class="kbd-hint"><kbd>Enter</kbd></span></div>` : ""}
       <div class="row"><span class="spacer"></span><button type="button" class="btn quiet small" id="quit">End round</button></div>`;
     $("#choices").onclick = (e) => { const b = e.target.closest("button[data-id]"); if (b) answerName(b.dataset.id); };
     bindStepButtons();
@@ -672,12 +856,12 @@
     q.results[q.i] = { kind: ok ? "hit" : "miss", id: c.id };
     score(state.map.id, c.id, ok);
     clearFeedback();
-    fbCircle("fb-true", c, 9);
-    fbLabel(c, c.name);
     if (!ok) {
       const wrong = state.map.callouts.find((o) => o.id === id);
-      if (wrong && wrong.level === state.level) { fbCircle("fb-guess", wrong, 5); fbLabel(wrong, wrong.name); }
+      if (wrong && wrong.level === state.level) { fbPoly("fb-wrong", wrong); fbLabel(wrong, wrong.name, 0, 4.5); }
     }
+    fbPoly("fb-answer", c);
+    fbLabel(c, c.name, 0, 4.5);
     rescaleMarks();
     renderMapList();
     renderPanel();
@@ -734,6 +918,11 @@
         if (o) answerName(o.id);
         return;
       }
+    }
+    if (state.mode === "edit" && (e.key === "Delete" || e.key === "Backspace") && state.vertex != null) {
+      e.preventDefault();
+      deleteVertex(selectedCallout(), state.vertex);
+      return;
     }
     if (e.key === "+" || e.key === "=") zoomCenter(1.4);
     else if (e.key === "-") zoomCenter(1 / 1.4);
