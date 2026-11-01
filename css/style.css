@@ -267,6 +267,32 @@ button { cursor: pointer; }
   .panel { border-left: 0; border-top: 1px solid var(--line); }
   .panel-body { overflow: visible; padding: 16px; }
   .app { height: auto; min-height: 100dvh; }
+
+  /* During a quiz step the page doesn't scroll: the panel takes the height its
+     content needs and the radar gets the rest, so answers and Next stay in view. */
+  .quiz-step .app { height: 100vh; height: 100dvh; min-height: 0; }
+  .quiz-step .main { grid-template-rows: minmax(0, 1fr) auto; overflow: hidden; }
+  .quiz-step .panel-body { position: relative; padding: 12px 14px; gap: 10px; }
+  /* Once answered, "End round" sits on the Next row instead of its own */
+  .quiz-answered .panel-body > .row:last-child { position: absolute; right: 14px; bottom: 16px; }
+  .quiz-step .prompt { padding: 0; }
+  .quiz-step .prompt .ask { font-size: 14px; }
+  .quiz-step .prompt .callname { font-size: 30px; }
+  .quiz-step .prompt .hint { margin-top: 4px; }
+  /* Find it: the stage prompt shows the name until you answer */
+  .quiz-step.mode-find .prompt .ask,
+  .quiz-step.mode-find:not(.quiz-answered) .prompt .callname { display: none; }
+  .quiz-step.mode-name .kbd-hint, .quiz-step .row .kbd-hint { display: none; }
+  .quiz-step .choices { grid-template-columns: 1fr 1fr; }
+  .quiz-step .choice { min-height: 44px; padding: 6px 10px; gap: 8px; font-size: 18px; }
+  .quiz-step .result { padding: 8px 12px; }
+  .quiz-step .result h4 { display: inline; font-size: 19px; }
+  .quiz-step .result .detail { display: inline; margin: 0; }
+  .quiz-step .result .detail::before { content: " · "; color: var(--muted); }
+  .quiz-step .result .desc {
+    font-size: 14px; line-height: 1.4;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

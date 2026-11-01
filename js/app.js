@@ -526,6 +526,10 @@
   }
 
   function renderPanel() {
+    // Body flags let the narrow layout fit a whole quiz step on screen.
+    const q = state.quiz, step = !!q && !q.done && (state.mode === "find" || state.mode === "name");
+    document.body.classList.toggle("quiz-step", step);
+    document.body.classList.toggle("quiz-answered", step && q.answered);
     $("#stagePrompt").textContent = "";
     if (state.mode === "explore") return renderExplore();
     if (state.mode === "edit") return renderEdit();
@@ -781,13 +785,13 @@
     clearFeedback();
     const c = current();
     if (c.level !== state.level) setLevel(c.level);
+    if (state.mode === "name") q.options = buildOptions(c);
+    renderPanel(); // first, so the stage has its final size before fitting the zone
     if (state.mode === "name") {
-      q.options = buildOptions(c);
       fbPoly("fb-target", c);
       ensureVisible(zoneCenter(c));
       rescaleMarks();
     }
-    renderPanel();
   }
 
   function buildOptions(c) {
@@ -839,7 +843,7 @@
     } else {
       detail = r.kind === "hit" ? "" : `That spot is <strong>${esc(c.name)}</strong>.`;
     }
-    return `<div class="result ${r.kind}"><h4>${titles[r.kind]}</h4>${detail ? `<p>${detail}</p>` : ""}<p>${esc(c.desc)}</p></div>`;
+    return `<div class="result ${r.kind}"><h4>${titles[r.kind]}</h4>${detail ? `<p class="detail">${detail}</p>` : ""}<p class="desc">${esc(c.desc)}</p></div>`;
   }
 
   function onMapClick(p) {
@@ -865,10 +869,10 @@
     if (!inside) el("line", { class: "fb-line", x1: p.x, y1: p.y, x2: edge.x, y2: edge.y }, layerFb);
     fbCircle("fb-guess" + (kind === "hit" ? " hit" : ""), p, 5);
     fbLabel(c, c.name, 0, 4.5);
-    rescaleMarks();
-    ensureVisible(zoneCenter(c));
     renderMapList();
     renderPanel();
+    rescaleMarks();
+    ensureVisible(zoneCenter(c));
   }
 
   function renderNameStep() {
@@ -910,9 +914,9 @@
     }
     fbPoly("fb-answer", c);
     fbLabel(c, c.name, 0, 4.5);
-    rescaleMarks();
     renderMapList();
     renderPanel();
+    rescaleMarks();
   }
 
   function bindStepButtons() {
