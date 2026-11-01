@@ -201,6 +201,10 @@ button { cursor: pointer; }
 .btn:hover { border-color: var(--muted); }
 .btn.primary { background: var(--t-gold); border-color: var(--t-gold); color: var(--ink); }
 .btn.primary:hover { filter: brightness(1.08); }
+/* A gold ring vanishes against a gold button: use a light ring with a dark gap. */
+.btn.primary:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; box-shadow: 0 0 0 2px var(--ink-deep); }
+/* The level group clips outside rings, so the gold (pressed) level gets a dark ring inside. */
+.levels button[aria-pressed="true"]:focus-visible { outline: 2px solid var(--ink-deep); outline-offset: -5px; }
 .btn.quiet { background: transparent; }
 .btn.small { height: 30px; padding: 0 10px; font-size: 15px; }
 .btn:disabled { opacity: .45; cursor: default; }
