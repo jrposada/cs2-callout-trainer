@@ -955,9 +955,14 @@
         if (r.near && r.near.id !== c.id) detail += ` You clicked <strong>${esc(r.near.name)}</strong>.`;
       }
     } else {
-      detail = r.kind === "hit" ? "" : `That spot is <strong>${esc(c.name)}</strong>.`;
+      titles.hit = "Correct";
+      detail = r.kind === "hit" ? "" : `It is <strong>${esc(c.name)}</strong>.`;
+      // A wrong pick on the other floor can't be outlined, so say where it is.
+      const pick = r.kind !== "hit" && state.map.callouts.find((o) => o.id === r.pick);
+      if (pick && pick.level !== c.level) detail += ` You picked <strong>${esc(pick.name)}</strong> (${pick.level} level).`;
     }
-    return `<div class="result ${r.kind}"><h4>${titles[r.kind]}</h4>${detail ? `<p class="detail">${detail}</p>` : ""}<p class="desc">${esc(c.desc)}</p></div>`;
+    const alt = state.mode === "name" && c.alt.length ? `<p class="alt">Also called ${c.alt.map(esc).join(", ")}</p>` : "";
+    return `<div class="result ${r.kind}"><h4>${titles[r.kind]}</h4>${detail ? `<p class="detail">${detail}</p>` : ""}<p class="desc">${esc(c.desc)}</p>${alt}</div>`;
   }
 
   function onMapClick(p) {
@@ -981,8 +986,11 @@
     q.results[q.i] = { kind, d: kind === "hit" ? 0 : edge.d, near, alias, id: c.id };
     // Zone edges are hand-placed and approximate, so "close" counts as correct.
     score(state.map.id, c.id, kind !== "miss");
-    // feedback on the radar
+    // feedback on the radar: the zone you clicked (if it wasn't a hit), then the answer on top
+    const wrong = kind !== "hit" && near && near.id !== c.id ? near : null;
+    if (wrong) fbPoly("fb-wrong", wrong);
     fbPoly("fb-answer", c);
+    if (wrong) fbLabel(wrong, wrong.name, 0, 4.5);
     if (kind !== "hit") el("line", { class: "fb-line", x1: p.x, y1: p.y, x2: edge.x, y2: edge.y }, layerFb);
     fbCircle("fb-guess" + (kind !== "miss" ? " hit" : ""), p, 5);
     fbLabel(c, c.name, 0, 4.5);
@@ -1022,7 +1030,7 @@
     const ok = id === c.id;
     q.answered = true;
     q.choice = id;
-    q.results[q.i] = { kind: ok ? "hit" : "miss", id: c.id };
+    q.results[q.i] = { kind: ok ? "hit" : "miss", id: c.id, pick: id };
     score(state.map.id, c.id, ok);
     clearFeedback();
     if (!ok) {

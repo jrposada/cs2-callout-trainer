@@ -278,6 +278,7 @@ button { cursor: pointer; }
 .result h4 { margin: 0; font: 700 22px/1.1 var(--display); }
 .result p { margin: 4px 0 0; color: var(--muted); }
 .result p strong { color: var(--text); font-weight: 600; }
+.result p.alt { font-size: 14px; }
 
 .choices { display: grid; gap: 8px; }
 .choice {
