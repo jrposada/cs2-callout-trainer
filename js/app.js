@@ -36,6 +36,7 @@
   // ---------- constants ----------
   const CLOSE_PX = 24;     // radar px outside a zone that still counts as "close"
   const INCH_TO_M = 0.0254; // 1 Hammer unit ~ 1 inch
+  const ANCHOR_PX = 14;     // screen px between a label and its name handle (Edit)
   const UNDO_KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘Z" : "Ctrl+Z";
   const TOUCH = window.matchMedia && matchMedia("(pointer: coarse)").matches;
   const NARROW = window.matchMedia ? matchMedia("(max-width: 860px)") : { matches: false };
@@ -312,6 +313,8 @@
           renderHandles();
         } else {
           gesture.type = "anchor";
+          // Keep the grab offset, since the handle is drawn above the label point.
+          gesture.off = { x: c.x - gesture.p0.x, y: c.y - gesture.p0.y };
         }
         gesture.moved = false;
       } else if (sel && sel.level === state.level && (calloutAt(gesture.p0) || {}).id === sel.id) {
@@ -373,7 +376,10 @@
         const dx = Math.round(p.x - gesture.p0.x), dy = Math.round(p.y - gesture.p0.y);
         c.poly = gesture.orig.map((v, k) => v + (k % 2 ? dy : dx));
         c.x = gesture.xy.x + dx; c.y = gesture.xy.y + dy;
-      } else { c.x = x; c.y = y; }
+      } else {
+        c.x = Math.round(Math.max(0, Math.min(1024, p.x + gesture.off.x)));
+        c.y = Math.round(Math.max(0, Math.min(1024, p.y + gesture.off.y)));
+      }
       updateZoneDom(c);
     }
   });
@@ -462,7 +468,8 @@
     ptsOf(c).forEach((p, i) => {
       el("circle", { class: "vertex" + (i === state.vertex ? " is-active" : ""), cx: p.x, cy: p.y, "data-i": i, "data-r": i === state.vertex ? 6.5 : 5 }, layerEdit);
     });
-    el("circle", { class: "anchor", cx: c.x, cy: c.y, "data-r": 7 }, layerEdit);
+    // The name handle sits a fixed ANCHOR_PX above the label, so a drag on the label (or the middle of a small zone) moves the zone.
+    el("circle", { class: "anchor", cx: c.x, cy: c.y, "data-y": c.y, "data-oy": -ANCHOR_PX, "data-r": 7 }, layerEdit);
     rescaleMarks();
   }
   function setHover(id) {
@@ -487,6 +494,7 @@
       t.setAttribute("dy", 4.5 * u);
     });
     layerEdit.querySelectorAll("[data-r]").forEach((n) => n.setAttribute("r", Number(n.dataset.r) * u));
+    layerEdit.querySelectorAll("[data-oy]").forEach((n) => n.setAttribute("cy", Number(n.dataset.y) + Number(n.dataset.oy) * u));
     layerFb.querySelectorAll("[data-r]").forEach((n) => n.setAttribute("r", Number(n.dataset.r) * u));
     layerFb.querySelectorAll("text").forEach((t) => {
       t.setAttribute("font-size", 16 * u);
