@@ -1009,7 +1009,8 @@
     let pool = m.callouts;
     if (onlyIds) pool = pool.filter((c) => onlyIds.includes(c.id));
     const n = onlyIds ? pool.length : (prefs.round || pool.length);
-    state.quiz = { items: pickRound(pool, n), i: 0, results: [], answered: false, done: false };
+    // learned0 is the map's learned count before the round, for the summary's "9 → 12 learned".
+    state.quiz = { items: pickRound(pool, n), i: 0, results: [], answered: false, done: false, learned0: mapCounts(m, state.mode).learned };
     fitView();
     prepareStep();
   }
@@ -1129,7 +1130,7 @@
     const kind = inside || alias ? "hit" : edge.d <= CLOSE_PX ? "close" : "miss";
     const q = state.quiz;
     q.answered = true;
-    q.results[q.i] = { kind, d: kind === "hit" ? 0 : edge.d, near, alias, id: c.id };
+    q.results[q.i] = { kind, d: kind === "hit" ? 0 : edge.d, near, alias, id: c.id, p: { x: p.x, y: p.y } };
     // Zone edges are hand-placed and approximate, so "close" counts as correct.
     score(state.map.id, c.id, kind !== "miss", "find");
     const clicked = near && near.id !== c.id ? ` You clicked ${near.name}.` : "";
@@ -1219,28 +1220,69 @@
     return total < all ? `Clean round. Try All ${all} or another map.` : "Clean round. Try another map.";
   }
 
-  function renderQuizSummary() {
+  // Summary radar: every missed zone with its name and, in Find it, each click that missed it.
+  // The zone picked in the list (q.focus) is drawn last, as the highlighted target.
+  function drawSummary(missed) {
     const q = state.quiz;
+    clearFeedback();
+    const here = missed.filter((c) => c.level === state.level);
+    const focus = here.find((c) => c.id === q.focus);
+    for (const c of here) if (c !== focus) fbPoly("fb-answer", c);
+    if (focus) fbPoly("fb-target", focus);
+    for (const r of q.results) {
+      if (r.kind === "miss" && r.p && here.some((c) => c.id === r.id)) fbCircle("fb-guess", r.p, 5);
+    }
+    for (const c of here) if (c !== focus) fbLabel(c, c.name, 0, 4.5);
+    if (focus) fbLabel(focus, focus.name, 0, 4.5);
+    rescaleMarks();
+  }
+
+  function renderQuizSummary() {
+    const q = state.quiz, m = state.map;
     const total = q.results.length;
     const hits = q.results.filter((r) => r.kind !== "miss").length;
-    const missed = q.results.filter((r) => r.kind === "miss").map((r) => state.map.callouts.find((c) => c.id === r.id));
-    if (!q.told) { q.told = true; announce(`Round over, ${hits} of ${total}.`); }
+    const missed = [...new Set(q.results.filter((r) => r.kind === "miss").map((r) => r.id))].map((id) => m.callouts.find((c) => c.id === id));
+    const learned = mapCounts(m, state.mode).learned, gain = learned - (q.learned0 || 0);
+    const first = !q.told;
+    if (first) {
+      q.told = true;
+      announce(`Round over, ${hits} of ${total}.`);
+      // Start on a level that has something to review, with the whole map in view.
+      if (missed.length && !missed.some((c) => c.level === state.level)) setLevel(missed[0].level);
+      fitView();
+    }
     panel.innerHTML = `
       ${progressBar()}
       <div>
         <div class="score-big">${hits}<small> / ${total}</small></div>
-        <p class="lede">${hits === total ? cleanNext(total) : `${total - hits} to work on. They will come up more often next time.`}</p>
+        <p class="lede">${hits === total ? cleanNext(total) : `${missed.length} to work on, shown on the radar. They will come up more often next time.`}</p>
+        <p class="gain">${esc(m.name)}: ${q.learned0 || 0} → ${learned} learned in ${state.mode === "name" ? "Name it" : "Find it"} <span class="${gain > 0 ? "up" : ""}">(${gain > 0 ? "+" : gain < 0 ? "−" : "±"}${Math.abs(gain)})</span></p>
       </div>
-      ${missed.length ? `<ul class="missed">${missed.map((c) => `<li><b>${esc(c.name)}</b>. ${esc(c.desc)}</li>`).join("")}</ul>` : ""}
+      ${missed.length ? `<ul class="missed">${missed.map((c) => `<li><button type="button" data-id="${c.id}" aria-pressed="${c.id === q.focus}"><b>${esc(c.name)}</b>${m.levels.length > 1 && c.level === "lower" ? ` <span class="lv">lower</span>` : ""}. ${esc(c.desc)}</button></li>`).join("")}</ul>` : ""}
       <div class="row">
         ${missed.length ? `<button type="button" class="btn primary" id="retryMissed">Drill the ${missed.length} missed</button>` : ""}
         <button type="button" class="btn ${missed.length ? "" : "primary"}" id="again">New round</button>
       </div>
       ${footer()}`;
+    drawSummary(missed);
+    const ml = panel.querySelector(".missed");
+    if (ml) ml.onclick = (e) => {
+      const b = e.target.closest("button[data-id]"); if (!b) return;
+      const c = missed.find((x) => x.id === b.dataset.id);
+      q.focus = c.id;
+      if (c.level !== state.level) setLevel(c.level);
+      const top = panel.scrollTop;
+      renderQuizSummary();
+      panel.scrollTop = top;
+      centerOn(zoneCenter(c), 2);
+      announce(`${c.name}${m.levels.length > 1 ? `, ${levelName(c.level).toLowerCase()}` : ""}, centred on the radar.`);
+      const nb = panel.querySelector(`.missed button[data-id="${CSS.escape(c.id)}"]`);
+      if (nb) nb.focus({ preventScroll: true });
+    };
     const rm = $("#retryMissed");
     if (rm) rm.onclick = () => startRound(missed.map((c) => c.id));
     $("#again").onclick = () => startRound();
-    (rm || $("#again")).focus();
+    if (first) (rm || $("#again")).focus({ preventScroll: true });
   }
 
   // ---------- keyboard ----------

@@ -307,9 +307,16 @@ button { cursor: pointer; }
 
 .score-big { font: 700 64px/1 var(--display); }
 .score-big small { font-size: 28px; color: var(--muted); }
-.missed { margin: 0; padding-left: 18px; color: var(--muted); }
-.missed li { margin: 2px 0; }
+.missed { list-style: none; margin: 0 -8px; padding: 0; color: var(--muted); }
+.missed li { margin: 0; }
+/* Each missed callout centres its zone on the radar. */
+.missed button { display: block; width: 100%; padding: 6px 8px; border: 0; border-radius: var(--radius-s); background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.missed button:hover, .missed button[aria-pressed="true"] { background: var(--raised); }
+.missed button[aria-pressed="true"] b { color: var(--t-gold); }
 .missed b { color: var(--text); font-weight: 600; }
+.missed .lv { color: var(--muted); font-size: 13px; }
+.gain { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+.gain .up { color: var(--ct-blue); font-weight: 600; }
 
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--radius-s); overflow: hidden; }
 .seg button { height: 32px; padding: 0 12px; border: 0; background: transparent; color: var(--muted); font: 600 15px/1 var(--display); }
