@@ -367,6 +367,15 @@
   $("#zoomOut").onclick = () => zoomCenter(1 / 1.4);
   $("#zoomReset").onclick = fitView;
   window.addEventListener("resize", rescaleMarks);
+  window.addEventListener("resize", updateMapFades);
+  $("#mapList").addEventListener("scroll", updateMapFades, { passive: true });
+  if (document.fonts) document.fonts.ready.then(updateMapFades);
+  for (const b of document.querySelectorAll(".maps-more")) {
+    b.onclick = () => {
+      const nav = $("#mapList");
+      nav.scrollBy({ left: b.dataset.dir * nav.clientWidth * 0.7, behavior: "smooth" });
+    };
+  }
 
   // ---------- rendering the radar ----------
   function levelCallouts() { return state.map.callouts.filter((c) => c.level === state.level); }
@@ -485,6 +494,15 @@
       b.onclick = () => selectMap(m.id);
       nav.appendChild(b);
     }
+    updateMapFades();
+  }
+
+  // Show an edge fade only on the side(s) where more maps are scrolled out of view.
+  function updateMapFades() {
+    const nav = $("#mapList"), wrap = $("#mapsWrap");
+    const max = nav.scrollWidth - nav.clientWidth;
+    wrap.classList.toggle("fade-l", nav.scrollLeft > 1);
+    wrap.classList.toggle("fade-r", nav.scrollLeft < max - 1);
   }
 
   function selectMap(id, keepMode) {
