@@ -96,6 +96,10 @@ button { cursor: pointer; }
   pointer-events: none;
 }
 .stage-prompt:empty { display: none !important; }
+.stage-prompt .sp-desc {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+  margin-top: 2px; font: 400 14px/1.35 var(--body); color: var(--text);
+}
 .toast {
   position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
   padding: 8px 14px; border-radius: var(--radius-m);
@@ -198,6 +202,8 @@ button { cursor: pointer; }
 .card .alt { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
 .card p.desc { margin: 8px 0 0; }
 .card .meta { margin-top: 10px; color: var(--muted); font-size: 13px; }
+/* Explore: keep the selected callout in view while the list scrolls under it. */
+.card.is-sticky { position: sticky; top: 0; z-index: 1; box-shadow: 0 0 0 20px var(--panel); }
 
 /* Quiz prompt: the memorable element */
 .prompt { padding: 4px 0 2px; }
@@ -266,6 +272,7 @@ button { cursor: pointer; }
   .main { grid-template-columns: 1fr; grid-template-rows: minmax(300px, 58vh) auto; overflow-y: auto; }
   .panel { border-left: 0; border-top: 1px solid var(--line); }
   .panel-body { overflow: visible; padding: 16px; }
+  .card.is-sticky { position: static; box-shadow: none; }
   .app { height: auto; min-height: 100dvh; }
 }
 
