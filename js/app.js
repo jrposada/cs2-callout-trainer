@@ -189,19 +189,38 @@
     const r = progress[mapId] && progress[mapId][id];
     return r ? Math.min(r.k, MASTER_STREAK) / MASTER_STREAK : 0;
   }
-  function mapMastery(m) {
-    if (!m.callouts.length) return 0;
-    return m.callouts.reduce((a, c) => a + calloutMastery(m.id, c.id), 0) / m.callouts.length;
+  // Learned = streak of MASTER_STREAK or more; learning = seen but not learned; fresh = never asked.
+  function mapCounts(m) {
+    const P = progress[m.id] || {};
+    const n = { learned: 0, learning: 0, fresh: 0, total: m.callouts.length };
+    for (const c of m.callouts) {
+      const r = P[c.id];
+      if (!r || !r.s) n.fresh++;
+      else if (r.k >= MASTER_STREAK) n.learned++;
+      else n.learning++;
+    }
+    return n;
   }
-  // Weighted pick: weak and unseen callouts come up more often.
+  function calloutStatus(r) {
+    if (!r || !r.s) return "Not drilled yet";
+    return r.k >= MASTER_STREAK ? "Learned" : `${r.k} of ${MASTER_STREAK} in a row`;
+  }
+  // Up to this share of a round goes to seen callouts on a zero streak, most-missed first.
+  const WEAK_SHARE = 0.4;
+  // Weak callouts come back first; the rest is a weighted pick where weak seen callouts outweigh unseen ones.
   function pickRound(pool, n) {
-    const items = pool.map((c) => {
-      const r = progress[state.map.id] && progress[state.map.id][c.id];
-      const w = 1 + 3 * (1 - calloutMastery(state.map.id, c.id)) + (r ? 0 : 1.5);
+    const P = progress[state.map.id] || {};
+    const misses = (c) => P[c.id].s - P[c.id].c;
+    n = Math.min(n, pool.length);
+    const weak = shuffle(pool.filter((c) => P[c.id] && P[c.id].s > 0 && P[c.id].k === 0)).sort((a, b) => misses(b) - misses(a));
+    const picked = weak.slice(0, Math.floor(n * WEAK_SHARE));
+    const rest = pool.filter((c) => !picked.includes(c)).map((c) => {
+      const r = P[c.id];
+      const w = r ? 1 + 4 * (1 - calloutMastery(state.map.id, c.id)) + Math.min(r.s - r.c, 4) : 3;
       return { c, key: Math.pow(Math.random(), 1 / w) };
     });
-    items.sort((a, b) => b.key - a.key);
-    return items.slice(0, Math.min(n, items.length)).map((i) => i.c);
+    rest.sort((a, b) => b.key - a.key);
+    return shuffle(picked.concat(rest.slice(0, n - picked.length).map((i) => i.c)));
   }
 
   // ---------- view / pan / zoom ----------
@@ -513,9 +532,9 @@
       b.type = "button";
       b.className = "map-btn";
       b.setAttribute("aria-current", String(state.map && m.id === state.map.id));
-      const pct = Math.round(mapMastery(m) * 100);
-      b.title = `${m.name}: ${pct}% learned`;
-      b.innerHTML = `${esc(m.name)}<span class="mastery"><i style="width:${pct}%"></i></span>`;
+      const n = mapCounts(m);
+      b.title = `${m.name}: ${n.learned} / ${n.total} learned`;
+      b.innerHTML = `${esc(m.name)}<span class="mastery"><i style="width:${n.total ? (100 * n.learned) / n.total : 0}%"></i></span>`;
       b.onclick = () => { if (m.id !== state.map.id && canLeave("map:" + m.id)) selectMap(m.id); };
       nav.appendChild(b);
     }
@@ -594,12 +613,12 @@
 
   function calloutCard(c, cls = "") {
     const r = progress[state.map.id] && progress[state.map.id][c.id];
-    const stat = r ? `Answered ${r.c} of ${r.s} correctly` : "Not drilled yet";
+    const ratio = r && r.s ? ` <span class="lifetime">${r.c} of ${r.s} right overall.</span>` : "";
     return `<div class="card ${cls}">
       <h3>${esc(c.name)}</h3>
       ${c.alt.length ? `<p class="alt">Also called ${c.alt.map(esc).join(", ")}</p>` : ""}
       <p class="desc">${esc(c.desc)}</p>
-      <div class="meta">${state.map.levels.length > 1 ? esc(levelName(c.level)) + ". " : ""}${stat}.</div>
+      <div class="meta">${state.map.levels.length > 1 ? esc(levelName(c.level)) + ". " : ""}<span class="status">${calloutStatus(r)}.</span>${ratio}</div>
     </div>`;
   }
 
@@ -610,7 +629,7 @@
     const list = m.callouts.slice().sort((a, b) => a.name.localeCompare(b.name)).filter((c) => !q || matches(c, q));
     const sel = m.callouts.find((c) => c.id === state.selected);
     panel.innerHTML = `
-      <p class="lede">${m.callouts.length} callouts on ${esc(m.name)}. Tap a zone or a name to see where it is and what it means.</p>
+      <p class="lede">${m.callouts.length} callouts on ${esc(m.name)}. Tap a zone or a name to see where it is and what it means. Study here, then test yourself in Name it and Find it.</p>
       <div class="row">
         <label class="switch"><input type="checkbox" id="labelsToggle" ${prefs.labels ? "checked" : ""}> Show all names on the map</label>
       </div>
@@ -620,7 +639,7 @@
         ${list.map((c) => `<li><button type="button" data-id="${c.id}" class="${c.id === state.selected ? "is-active" : ""}">
             <span class="nm">${esc(c.name)}</span>
             ${m.levels.length > 1 && c.level === "lower" ? `<span class="lv">lower</span>` : ""}
-            <span class="ms" title="${Math.round(calloutMastery(m.id, c.id) * 100)}% learned"><i style="width:${calloutMastery(m.id, c.id) * 100}%"></i></span>
+            <span class="ms" title="${calloutStatus(progress[m.id] && progress[m.id][c.id])}"><i style="width:${calloutMastery(m.id, c.id) * 100}%"></i></span>
           </button></li>`).join("") || `<li class="lede">No callout matches “${esc(state.search)}”.</li>`}
       </ul>
       ${footer()}`;
@@ -822,7 +841,7 @@
 
   function renderQuizSetup() {
     const m = state.map;
-    const pct = Math.round(mapMastery(m) * 100);
+    const n = mapCounts(m);
     const isFind = state.mode === "find";
     const sizes = [10, 20, 0];
     panel.innerHTML = `
@@ -834,8 +853,21 @@
         <div class="seg" id="roundSize">${sizes.map((s) => `<button type="button" data-n="${s}" aria-pressed="${prefs.round === s}">${s || "All " + m.callouts.length}</button>`).join("")}</div>
       </div>
       <div class="row"><button type="button" class="btn primary" id="start">Start ${esc(m.name)} round</button></div>
-      <p class="lede">${pct}% of ${esc(m.name)} learned. A callout counts as learned after ${MASTER_STREAK} correct answers in a row.</p>
+      <div class="breakdown">
+        <p class="counts"><strong class="n-learned">${n.learned} learned</strong> · <span class="n-learning">${n.learning} learning</span> · <span class="n-new">${n.fresh} new</span></p>
+        <p class="lede">A callout counts as learned after ${MASTER_STREAK} correct answers in a row.</p>
+        ${n.fresh < n.total ? `<button type="button" class="link-btn" id="resetProgress">Reset ${esc(m.name)} progress</button>` : ""}
+      </div>
       ${footer()}`;
+    const rp = $("#resetProgress");
+    if (rp) rp.onclick = () => {
+      if (!confirm(`Reset your ${m.name} progress? Every ${m.name} callout goes back to new. Other maps keep theirs.`)) return;
+      delete progress[m.id];
+      store.set(K.progress, progress);
+      renderMapList();
+      renderQuizSetup();
+      toast(`${m.name} progress reset`);
+    };
     $("#roundSize").onclick = (e) => {
       const b = e.target.closest("button"); if (!b) return;
       prefs.round = Number(b.dataset.n); store.set(K.prefs, prefs); renderQuizSetup();
@@ -916,15 +948,23 @@
     let detail;
     if (state.mode === "find") {
       if (r.kind === "hit") {
-        detail = r.near && r.near.id !== c.id ? `You clicked <strong>${esc(r.near.name)}</strong>, which is inside it.` : "";
+        if (r.alias) detail = r.near.alt.includes(c.name)
+          ? `You clicked <strong>${esc(r.near.name)}</strong>, which some teams also call ${esc(c.name)}.`
+          : `You clicked <strong>${esc(r.near.name)}</strong>, a name some teams also use for ${esc(c.name)}.`;
+        else detail = r.near && r.near.id !== c.id ? `You clicked <strong>${esc(r.near.name)}</strong>, which is inside it.` : "";
       } else {
         detail = `You were <strong>${meters(r.d)} m</strong> outside it.`;
         if (r.near && r.near.id !== c.id) detail += ` You clicked <strong>${esc(r.near.name)}</strong>.`;
       }
     } else {
-      detail = r.kind === "hit" ? "" : `That spot is <strong>${esc(c.name)}</strong>.`;
+      titles.hit = "Correct";
+      detail = r.kind === "hit" ? "" : `It is <strong>${esc(c.name)}</strong>.`;
+      // A wrong pick on the other floor can't be outlined, so say where it is.
+      const pick = r.kind !== "hit" && state.map.callouts.find((o) => o.id === r.pick);
+      if (pick && pick.level !== c.level) detail += ` You picked <strong>${esc(pick.name)}</strong> (${pick.level} level).`;
     }
-    return `<div class="result ${r.kind}"><h4>${titles[r.kind]}</h4>${detail ? `<p class="detail">${detail}</p>` : ""}<p class="desc">${esc(c.desc)}</p></div>`;
+    const alt = state.mode === "name" && c.alt.length ? `<p class="alt">Also called ${c.alt.map(esc).join(", ")}</p>` : "";
+    return `<div class="result ${r.kind}"><h4>${titles[r.kind]}</h4>${detail ? `<p class="detail">${detail}</p>` : ""}<p class="desc">${esc(c.desc)}</p>${alt}</div>`;
   }
 
   function onMapClick(p) {
@@ -939,16 +979,26 @@
     const pts = ptsOf(c);
     const inside = pointInPoly(p, pts);
     const edge = inside ? { d: 0, x: p.x, y: p.y } : edgeNearest(p, pts);
-    const near = calloutAt(p);
-    const kind = inside || (near && near.name === c.name) ? "hit" : edge.d <= CLOSE_PX ? "close" : "miss";
+    // A zone that goes by the target's name (either way round) is the same callout to a teammate.
+    // Like areas and spots, any zone under the click counts, not only the topmost one.
+    const same = (o) => o.name === c.name || c.alt.includes(o.name) || o.alt.includes(c.name);
+    const aliasZone = inside ? null : levelCallouts().find((o) => o.id !== c.id && same(o) && pointInPoly(p, ptsOf(o)));
+    const alias = !!aliasZone;
+    const near = aliasZone || calloutAt(p);
+    const kind = inside || alias ? "hit" : edge.d <= CLOSE_PX ? "close" : "miss";
     const q = state.quiz;
     q.answered = true;
-    q.results[q.i] = { kind, d: kind === "hit" ? 0 : edge.d, near, id: c.id };
-    score(state.map.id, c.id, kind === "hit");
-    // feedback on the radar
+    q.results[q.i] = { kind, d: kind === "hit" ? 0 : edge.d, near, alias, id: c.id };
+    // Zone edges are hand-placed and approximate, so "close" counts as correct.
+    score(state.map.id, c.id, kind !== "miss");
+    // feedback on the radar: the zone you clicked (if it wasn't a hit), then the answer on top
+    const wrong = kind !== "hit" && near && near.id !== c.id ? near : null;
+    if (wrong) fbPoly("fb-wrong", wrong);
     fbPoly("fb-answer", c);
-    if (!inside) el("line", { class: "fb-line", x1: p.x, y1: p.y, x2: edge.x, y2: edge.y }, layerFb);
-    fbCircle("fb-guess" + (kind === "hit" ? " hit" : ""), p, 5);
+    if (kind !== "hit") el("line", { class: "fb-line", x1: p.x, y1: p.y, x2: edge.x, y2: edge.y }, layerFb);
+    fbCircle("fb-guess" + (kind !== "miss" ? " hit" : ""), p, 5);
+    // After the dot so it stays readable; nudged away from the answer's name so neighbours don't collide.
+    if (wrong) fbLabel(wrong, wrong.name, 0, wrong.y <= c.y ? -12 : 21);
     fbLabel(c, c.name, 0, 4.5);
     renderMapList();
     renderPanel();
@@ -986,7 +1036,7 @@
     const ok = id === c.id;
     q.answered = true;
     q.choice = id;
-    q.results[q.i] = { kind: ok ? "hit" : "miss", id: c.id };
+    q.results[q.i] = { kind: ok ? "hit" : "miss", id: c.id, pick: id };
     score(state.map.id, c.id, ok);
     clearFeedback();
     if (!ok) {
@@ -1018,16 +1068,23 @@
     prepareStep();
   }
 
+  // After a clean round, point to the next step: Name it leads to Find it, Find it to a bigger round.
+  function cleanNext(total) {
+    if (state.mode === "name") return "Clean round. Now try finding them in Find it.";
+    const all = state.map.callouts.length;
+    return total < all ? `Clean round. Try All ${all} or another map.` : "Clean round. Try another map.";
+  }
+
   function renderQuizSummary() {
     const q = state.quiz;
     const total = q.results.length;
-    const hits = q.results.filter((r) => r.kind === "hit").length;
-    const missed = q.results.filter((r) => r.kind !== "hit").map((r) => state.map.callouts.find((c) => c.id === r.id));
+    const hits = q.results.filter((r) => r.kind !== "miss").length;
+    const missed = q.results.filter((r) => r.kind === "miss").map((r) => state.map.callouts.find((c) => c.id === r.id));
     panel.innerHTML = `
       ${progressBar()}
       <div>
         <div class="score-big">${hits}<small> / ${total}</small></div>
-        <p class="lede">${hits === total ? "Clean round. Try a bigger round or another map." : `${total - hits} to work on. They will come up more often next time.`}</p>
+        <p class="lede">${hits === total ? cleanNext(total) : `${total - hits} to work on. They will come up more often next time.`}</p>
       </div>
       ${missed.length ? `<ul class="missed">${missed.map((c) => `<li><b>${esc(c.name)}</b>. ${esc(c.desc)}</li>`).join("")}</ul>` : ""}
       <div class="row">
