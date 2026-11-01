@@ -680,16 +680,26 @@
         if (!list.length) return;
         selectCallout(list[0].id, true);
         const s2 = $("#search"); s2.focus(); s2.setSelectionRange(s2.value.length, s2.value.length);
-      } else if (e.key === "Escape" && s.value) {
+      } else if (e.key === "Escape") {
+        if (!escapeStep()) return;
         e.preventDefault();
-        s.value = "";
-        s.oninput();
+        const s2 = $("#search"); if (s2) s2.focus();
       } else if (e.key === "ArrowDown") {
         const b = $("#list button[data-id]");
         if (b) { e.preventDefault(); b.focus(); }
       }
     };
     $("#list").onclick = (e) => { const b = e.target.closest("button[data-id]"); if (b) selectCallout(b.dataset.id, true); };
+  }
+
+  // Escape undoes one thing at a time: the Edit point, then the search, then the selection.
+  function escapeStep() {
+    if (state.mode === "edit" && state.vertex != null) { state.vertex = null; renderHandles(); renderPanel(); return true; }
+    if (state.mode === "explore" && state.search) { state.search = ""; renderMarkers(); renderPanel(); return true; }
+    if ((state.mode === "explore" || state.mode === "edit") && state.selected) {
+      state.selected = null; state.vertex = null; renderMarkers(); renderPanel(); return true;
+    }
+    return false;
   }
 
   function selectCallout(id, center) {
@@ -1130,6 +1140,7 @@
   // ---------- keyboard ----------
   document.addEventListener("keydown", (e) => {
     if (e.target.matches("input, textarea")) return;
+    if (e.key === "Escape") { if (escapeStep()) e.preventDefault(); return; }
     const q = state.quiz;
     if (q && !q.done) {
       if ((e.key === "Enter" || e.key === " ") && q.answered && !e.target.matches("button")) { e.preventDefault(); nextStep(); return; }
