@@ -629,7 +629,7 @@
     const list = m.callouts.slice().sort((a, b) => a.name.localeCompare(b.name)).filter((c) => !q || matches(c, q));
     const sel = m.callouts.find((c) => c.id === state.selected);
     panel.innerHTML = `
-      <p class="lede">${m.callouts.length} callouts on ${esc(m.name)}. Tap a zone or a name to see where it is and what it means.</p>
+      <p class="lede">${m.callouts.length} callouts on ${esc(m.name)}. Tap a zone or a name to see where it is and what it means. Study here, then test yourself in Name it and Find it.</p>
       <div class="row">
         <label class="switch"><input type="checkbox" id="labelsToggle" ${prefs.labels ? "checked" : ""}> Show all names on the map</label>
       </div>
@@ -1062,6 +1062,13 @@
     prepareStep();
   }
 
+  // After a clean round, point to the next step: Name it leads to Find it, Find it to a bigger round.
+  function cleanNext(total) {
+    if (state.mode === "name") return "Clean round. Now try finding them in Find it.";
+    const all = state.map.callouts.length;
+    return total < all ? `Clean round. Try All ${all} or another map.` : "Clean round. Try another map.";
+  }
+
   function renderQuizSummary() {
     const q = state.quiz;
     const total = q.results.length;
@@ -1071,7 +1078,7 @@
       ${progressBar()}
       <div>
         <div class="score-big">${hits}<small> / ${total}</small></div>
-        <p class="lede">${hits === total ? "Clean round. Try a bigger round or another map." : `${total - hits} to work on. They will come up more often next time.`}</p>
+        <p class="lede">${hits === total ? cleanNext(total) : `${total - hits} to work on. They will come up more often next time.`}</p>
       </div>
       ${missed.length ? `<ul class="missed">${missed.map((c) => `<li><b>${esc(c.name)}</b>. ${esc(c.desc)}</li>`).join("")}</ul>` : ""}
       <div class="row">
