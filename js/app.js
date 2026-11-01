@@ -718,9 +718,9 @@
     if (u) u.onclick = () => { delete edits[m.id][sel.id]; state.vertex = null; saveEdits(); };
     $("#copyJson").onclick = async () => {
       try { await navigator.clipboard.writeText(exportJson()); toast("Map data copied"); }
-      catch { downloadJson(); }
+      catch { const f = downloadJson(true); toast(`Couldn't copy to the clipboard, downloaded ${f} instead.`, 4000); }
     };
-    $("#dlJson").onclick = downloadJson;
+    $("#dlJson").onclick = () => downloadJson();
     $("#resetEdits").onclick = () => { delete edits[m.id]; state.vertex = null; saveEdits(); toast("Changes discarded"); };
   }
   // Same layout as data/maps.js, so the export can be pasted straight in.
@@ -762,14 +762,16 @@
     if (t) { t.setAttribute("x", c.x); t.setAttribute("y", c.y); }
     renderHandles();
   }
-  function downloadJson() {
-    const blob = new Blob([exportJson() + "\n"], { type: "application/json" });
+  // The export is a snippet for data/maps.js, not a JSON document, so save it as plain text.
+  function downloadJson(quiet) {
+    const blob = new Blob([exportJson() + "\n"], { type: "text/plain" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `${state.map.id}-callouts.json`;
+    a.download = `${state.map.id}-callouts.txt`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    toast("Downloaded " + a.download);
+    if (!quiet) toast("Downloaded " + a.download);
+    return a.download;
   }
   function commitEdit(c) {
     if (!c) return;
