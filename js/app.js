@@ -567,6 +567,7 @@
     document.body.classList.toggle("quiz-step", step);
     document.body.classList.toggle("quiz-answered", step && q.answered);
     $("#stagePrompt").textContent = "";
+    $("#stagePrompt").classList.remove("is-find");
     if (state.mode === "explore") return renderExplore();
     if (state.mode === "edit") return renderEdit();
     return renderQuiz();
@@ -794,7 +795,10 @@
   // ----- Quizzes (Find it / Name it) -----
   function renderQuiz() {
     const q = state.quiz;
-    $("#stagePrompt").textContent = state.mode === "find" && q && !q.done && !q.answered ? current().name : "";
+    // Find it: the target name sits on the radar until you answer (a pill on wide screens).
+    const sp = $("#stagePrompt");
+    sp.textContent = state.mode === "find" && q && !q.done && !q.answered ? current().name : "";
+    sp.classList.toggle("is-find", !!sp.textContent);
     if (!q) return renderQuizSetup();
     if (q.done) return renderQuizSummary();
     return state.mode === "find" ? renderFindStep() : renderNameStep();
