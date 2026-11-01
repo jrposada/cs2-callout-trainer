@@ -166,6 +166,8 @@ button { cursor: pointer; }
 .show-labels .label, .label.is-hover, .label.is-active { display: block; }
 .label.is-dim { display: none; }
 .label.is-active { fill: var(--t-gold); }
+/* Hidden by the declutter pass because it would overlap a more important label. */
+.label.is-hidden, .fb-label.is-hidden { display: none; }
 
 .vertex { fill: var(--text); stroke: var(--ink-deep); stroke-width: 1.5; vector-effect: non-scaling-stroke; cursor: grab; }
 .vertex.is-active { fill: var(--t-gold); }
