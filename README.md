@@ -34,16 +34,30 @@ The **Live** tab is for a second screen during a match. Hit **Start** (or `Space
 
 The **Smokes** tab shows where to stand to throw well-known smokes, and how to throw them, on the same radar. Mirage has 11 line-ups so far; other maps show an empty state with a link to Mirage.
 
-- Every landing spot is a circle about the size of a smoke. Tap one to see the spots it is thrown from, with an arc for each throw; tap a throw spot (or a name in the list) for its card: where to **stand**, what to **aim** at, the **throw** (left click, jump-throw and so on, plus standing or crouching) and what it **blocks**. The view zooms to fit the throw and the landing.
+- Every landing spot is a circle about the size of a smoke. Tap one to see the spots it is thrown from, with an arc for each throw; tap a throw spot (or a name in the list) for its card: where to **stand**, what to **aim** at, the **technique** (which mouse button, standing, walking or running, jump-throw or not, crouching or not) and what it **blocks**. Two screenshots, **Where to stand** and **Where to aim**, open full size on click (`←` `→` switch, `Esc` closes); until someone adds them the card says "Screenshot needed". The view zooms to fit the throw and the landing.
 - Filter by side (`T`, `C`, `B` for both; remembered) and by target (A, Mid, B; pick any mix).
 - `[` and `]` step through the list, `Esc` (or a tap on empty radar) goes back one step, `+` `−` `0` zoom.
 - Links open a line-up directly: `#mirage/smokes/ct-from-t-roof`.
-- **Drill** (the Browse | Drill switch at the top) asks "Where do you stand to smoke Window?" with the landing spot lit up. Click your throw spot: within about 2.5 m (100 units) is a **Hit**, within about 5 m is **Close**, and only a Hit counts. The reveal shows the real spot, both rings, your click and where to stand. Then a bonus question, **Which throw?** (keys `1`–`6`), which never touches your streak, and the aim. `Enter` goes on. Rounds are up to 8 line-ups on the chosen side, new and still-learning ones first.
+- **Drill** (the Browse | Drill switch at the top) asks "Where do you stand to smoke Window?" with the landing spot lit up. Click your throw spot: within about 2.5 m (100 units) is a **Hit**, within about 5 m is **Close**, and only a Hit counts. The reveal shows the real spot, both rings, your click and where to stand. Then a bonus question, **Which throw?** (keys `1`–`6`: the right technique among common ones such as "Jump · Left" or "Stand · L+R"), which never touches your streak, and the aim, with the screenshots when the line-up has them. `Enter` goes on. Rounds are up to 8 line-ups on the chosen side, new and still-learning ones first.
 - The summary shows your score, how many throws you got right, and every missed line-up on the radar; click one to open it in Browse. A line-up counts as learned after three Hits in a row. Drill progress is saved in its own store (`cct.smokes`), and **Reset Mirage smokes** clears only that, not your callout progress.
 
 **These line-ups are approximate.** They are well-known community smokes, described in our own words and placed by hand from memory of common practice. **We have not tested them in game**, so throw spots, aims and techniques may be off by a step or two. Every card says "Approximate, not checked in game" until someone confirms it.
 
 If a line-up is wrong, use **This line-up is wrong?** on its card. It opens a GitHub issue with the line-up already named; say what's off and, if you can, add a clip. A line-up only becomes **Checked** through a pull request to `data/smokes.js` from someone who threw it in game: set `status: "checked"` and `checked: "YYYY-MM"`, and fix the spot or text if needed.
+
+## Adding line-up screenshots
+
+No screenshots ship yet. Each line-up can have two, and only **screenshots you took yourself** are accepted: don't copy them from guides, videos or other sites.
+
+1. Open the map in a private practice match (no other players), so nothing gets in the way.
+2. Stand exactly on the throw spot and take the **stand** shot: look so that a recognisable landmark (a wall corner, a box, a door frame) shows where you are standing. A slightly downward view that shows the floor at your feet helps.
+3. Line up the throw and take the **aim** shot with the crosshair in the middle of the screen, on the spot the card's Aim text describes.
+4. Crop or scale both to **16:9, about 1280×720**, and save them as **WebP** under about **150 KB** each.
+5. Name them after the line-up id and put them in `img/smokes/<map>/`:
+   `img/smokes/mirage/window-from-t-spawn-stand.webp` and `img/smokes/mirage/window-from-t-spawn-aim.webp`.
+6. In `data/smokes.js`, add `shots: { stand: true, aim: true }` to that line-up (`true` means the file name above; a path string also works). If the crosshair isn't centred in the aim shot, add `aimAt: [x, y]` with its position as fractions of the width and height, e.g. `[0.52, 0.47]`; the app rings that point.
+
+A line-up without `shots` shows the "Screenshot needed" placeholder and requests no image. If a listed file is missing, the card falls back to the placeholder and the console says which file. Open a pull request with the images and the data change, and say in it that you took them.
 
 ## Where the data comes from
 
@@ -107,4 +121,5 @@ js/live.js          Live mode
 js/smokes.js        Smokes mode
 tools/              zone generator and the list of area callouts
 img/radars/*.webp   clean CS2 radars
+img/smokes/<map>/   line-up screenshots (<id>-stand.webp, <id>-aim.webp)
 ```
