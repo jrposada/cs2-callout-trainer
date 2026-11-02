@@ -106,11 +106,39 @@
 .smk-layer.has-sel .smk-land:not(.is-sel), .smk-layer.has-sel .smk-count,
 .smk-layer .is-dim { opacity: .15; }
 
+/* Drill */
+#smkView { align-self: flex-start; }
+.smk-approx { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.result .acc { display: inline-block; margin-top: 6px; }
+.result .desc strong { color: var(--text); }
+.smk-ask { margin: 0; color: var(--muted); }
+.tag-bonus { margin-left: 4px; padding: 1px 7px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; color: var(--muted); }
+.smk-choices { grid-template-columns: repeat(2, 1fr); }
+.smk-choices .choice { min-height: 44px; font-size: 18px; }
+.smk-aimblock { padding: 10px 14px; border-radius: var(--radius-m); background: var(--ink); border: 1px solid var(--line); }
+.smk-aimblock .smk-aim { margin: 2px 0 0; }
+.smk-tech-note { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; }
+.smk-land.is-target { fill: var(--smoke-fill-on); stroke: var(--t-gold); stroke-opacity: 1; stroke-width: 2.5; animation: glow 1.4s ease-in-out infinite alternate; }
+.smk-tol { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 3 4; vector-effect: non-scaling-stroke; }
+.smk-layer .fb-guess { pointer-events: none; }
+
 @media (max-width: 860px) {
   .mode-smokes .panel-body .kbd-hint { display: none; }
+  /* Drill steps keep one panel height from question to reveal, so the radar doesn't jump. */
+  .mode-smokes.quiz-step .main { grid-template-rows: minmax(140px, 1fr) minmax(0, 54dvh); }
+  .mode-smokes.quiz-answered .prompt .ask, .mode-smokes.quiz-answered .prompt .hint, .mode-smokes.smk-picked .smk-ask { display: none; }
+  .mode-smokes.quiz-step .smk-choices { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .mode-smokes.quiz-step .smk-choices .choice { padding: 4px 8px; gap: 6px; font-size: 16px; }
+  .mode-smokes.quiz-step .result .desc { -webkit-line-clamp: 3; }
+  .mode-smokes.quiz-step .result .acc { margin: 0 0 0 8px; vertical-align: 1px; }
+  .mode-smokes.quiz-step .result .desc { margin-top: 2px; }
+  .mode-smokes.quiz-step .smk-aimblock { display: flex; align-items: baseline; gap: 10px; padding: 6px 10px; }
+  .mode-smokes.quiz-step .smk-aim { font-size: 17px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+  .mode-smokes.quiz-step .smk-tech-note { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .smk-layer path.is-draw { animation: none; stroke-dasharray: none; }
   .smk-land { transition: none; }
+  .smk-land.is-target { animation: none; }
 }
