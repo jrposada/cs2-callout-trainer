@@ -38,6 +38,8 @@ The **Smokes** tab shows where to stand to throw well-known smokes, and how to t
 - Filter by side (`T`, `C`, `B` for both; remembered) and by target (A, Mid, B; pick any mix).
 - `[` and `]` step through the list, `Esc` (or a tap on empty radar) goes back one step, `+` `−` `0` zoom.
 - Links open a line-up directly: `#mirage/smokes/ct-from-t-roof`.
+- **Drill** (the Browse | Drill switch at the top) asks "Where do you stand to smoke Window?" with the landing spot lit up. Click your throw spot: within about 2.5 m (100 units) is a **Hit**, within about 5 m is **Close**, and only a Hit counts. The reveal shows the real spot, both rings, your click and where to stand. Then a bonus question, **Which throw?** (keys `1`–`6`), which never touches your streak, and the aim. `Enter` goes on. Rounds are up to 8 line-ups on the chosen side, new and still-learning ones first.
+- The summary shows your score, how many throws you got right, and every missed line-up on the radar; click one to open it in Browse. A line-up counts as learned after three Hits in a row. Drill progress is saved in its own store (`cct.smokes`), and **Reset Mirage smokes** clears only that, not your callout progress.
 
 **These line-ups are approximate.** They are well-known community smokes, described in our own words and placed by hand from memory of common practice. **We have not tested them in game**, so throw spots, aims and techniques may be off by a step or two. Every card says "Approximate, not checked in game" until someone confirms it.
 
