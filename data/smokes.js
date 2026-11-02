@@ -11,9 +11,15 @@
 //   to      where it lands: callout id from data/maps.js (+ x, y, level; x, y default to the callout's)
 //   from    where you throw it from: callout id + the exact spot (inside that callout's zone) + level
 //   stand   how to find the spot     aim   what to put the crosshair on     lands  what it blocks
-//   throw   "left" | "right" | "leftright" | "jump" | "runjump" | "walk"
-//   stance  "standing" | "crouch"
+//   technique  how to throw it, one value per facet:
+//              click "left" | "right" | "both" (left and right together)
+//              move  "stand" | "walk" | "run"     jump  true | false     crouch  true | false
 //   status  "unverified" | "checked" (checked also needs checked: "YYYY-MM")
+//   shots   optional screenshots, taken in game by a contributor (see README, "Adding line-up screenshots"):
+//           { stand: true | "path", aim: true | "path", aimAt: [x, y] }
+//           true means the usual file, img/smokes/<map>/<id>-stand.webp or -aim.webp. aimAt is where the
+//           crosshair sits in the aim shot, as fractions of its width and height (default [0.5, 0.5]).
+//           Leave shots out until the files exist; the card then shows "Screenshot needed".
 window.CALLOUT_SMOKES = {
   mirage: [
     {
@@ -22,7 +28,7 @@ window.CALLOUT_SMOKES = {
       from: { callout: "t-spawn", x: 905, y: 400, level: "upper" },
       stand: "Near the top of T Spawn, backed into the corner by the wall, before you walk down towards mid.",
       aim: "The tip of the antenna on the roof ahead, just left of where it meets the sky.",
-      throw: "jump", stance: "standing",
+      technique: { click: "left", move: "stand", jump: true, crouch: false },
       lands: "In the window, so the CT sniper there can't see top mid.",
       status: "unverified",
     },
@@ -32,7 +38,7 @@ window.CALLOUT_SMOKES = {
       from: { callout: "top-mid", x: 720, y: 505, level: "upper" },
       stand: "At the bottom of top mid, against the left-hand wall where it meets the corner.",
       aim: "The top-left corner of the building across mid, along the roof edge.",
-      throw: "left", stance: "standing",
+      technique: { click: "left", move: "stand", jump: false, crouch: false },
       lands: "In the mouth of Connector, cutting the CT view from there into mid.",
       status: "unverified",
     },
@@ -42,7 +48,7 @@ window.CALLOUT_SMOKES = {
       from: { callout: "top-mid", x: 705, y: 440, level: "upper" },
       stand: "At top mid, tucked against the wall on the right, just past the boxes.",
       aim: "The right-hand edge of the tall building on the far side of mid, about a third of the way down from the top.",
-      throw: "left", stance: "standing",
+      technique: { click: "left", move: "stand", jump: false, crouch: false },
       lands: "On Catwalk (B Short), so CTs there can't watch you cross mid.",
       status: "unverified",
     },
@@ -52,7 +58,7 @@ window.CALLOUT_SMOKES = {
       from: { callout: "t-roof", x: 775, y: 660, level: "upper" },
       stand: "On the T side of the A ramp area, in the corner where the wall turns.",
       aim: "The top edge of the tower above the site, just right of its corner.",
-      throw: "jump", stance: "standing",
+      technique: { click: "left", move: "stand", jump: true, crouch: false },
       lands: "In the CT entrance to A, so rotators from CT can't see the site.",
       status: "unverified",
     },
@@ -62,7 +68,7 @@ window.CALLOUT_SMOKES = {
       from: { callout: "t-roof", x: 790, y: 610, level: "upper" },
       stand: "Against the wall on the T side of the A ramp area, a step back from the corner.",
       aim: "The top-left corner of the roof ahead, where it meets the sky.",
-      throw: "jump", stance: "standing",
+      technique: { click: "left", move: "stand", jump: true, crouch: false },
       lands: "In Jungle, so the CT there can't see the site or ramp.",
       status: "unverified",
     },
@@ -72,7 +78,7 @@ window.CALLOUT_SMOKES = {
       from: { callout: "t-roof", x: 780, y: 580, level: "upper" },
       stand: "At the far end of the T side of the A ramp area, against the back wall.",
       aim: "A dark notch on the roof line ahead, slightly right of the middle.",
-      throw: "left", stance: "standing",
+      technique: { click: "left", move: "stand", jump: false, crouch: false },
       lands: "On Stairs, cutting the view from there to the site.",
       status: "unverified",
     },
@@ -82,7 +88,7 @@ window.CALLOUT_SMOKES = {
       from: { callout: "b-apartments", x: 395, y: 185, level: "upper" },
       stand: "In B Apartments, against the far wall near the window that looks out over the site.",
       aim: "The top edge of the window frame in front of you, near its left corner.",
-      throw: "left", stance: "standing",
+      technique: { click: "left", move: "stand", jump: false, crouch: false },
       lands: "In the Market window, so CTs inside Market can't watch B.",
       status: "unverified",
     },
@@ -92,7 +98,7 @@ window.CALLOUT_SMOKES = {
       from: { callout: "b-apartments", x: 360, y: 200, level: "upper" },
       stand: "In B Apartments, just inside the room before the exit, against the left wall.",
       aim: "The right-hand corner of the archway ahead, where the light starts.",
-      throw: "leftright", stance: "standing",
+      technique: { click: "both", move: "stand", jump: false, crouch: false },
       lands: "On the Market door, so CTs can't come through or watch from it.",
       status: "unverified",
     },
@@ -102,7 +108,7 @@ window.CALLOUT_SMOKES = {
       from: { callout: "connector", x: 500, y: 575, level: "upper" },
       stand: "In Connector, close to the mid end, against the wall on the right.",
       aim: "The top of the far wall at the end of mid, slightly left of centre.",
-      throw: "left", stance: "standing",
+      technique: { click: "left", move: "stand", jump: false, crouch: false },
       lands: "At top mid, so Ts can't take mid control for free.",
       status: "unverified",
     },
@@ -112,7 +118,7 @@ window.CALLOUT_SMOKES = {
       from: { callout: "jungle", x: 480, y: 640, level: "upper" },
       stand: "In Jungle, with your back to the wall on the CT side.",
       aim: "The top edge of the building past the site, right above the ramp.",
-      throw: "leftright", stance: "standing",
+      technique: { click: "both", move: "stand", jump: false, crouch: false },
       lands: "On the top of A Ramp, so Ts there can't see onto the site.",
       status: "unverified",
     },
@@ -122,7 +128,7 @@ window.CALLOUT_SMOKES = {
       from: { callout: "market", x: 270, y: 450, level: "upper" },
       stand: "In Market, near the door out to B, against the wall on the right.",
       aim: "The top edge of the balcony opposite, near its right end.",
-      throw: "left", stance: "standing",
+      technique: { click: "left", move: "stand", jump: false, crouch: false },
       lands: "Where Apartments come out onto B, so Ts there can't see the site.",
       status: "unverified",
     },
