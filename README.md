@@ -8,13 +8,13 @@ Cobblestone is not included because it is not in CS2, so there is no CS2 radar f
 ## Modes
 
 - **Explore** – every callout is a zone on the radar. Hover or tap a zone, or search the list, to see its name, other names and what it is. Toggle all names on or off.
-- **Find it** – you get a name and click anywhere inside its zone. On a miss you see how many metres outside it you were and which zone you clicked.
-- **Name it** – a zone lights up on the radar; pick its name from four nearby callouts (keys `1`–`4`).
+- **Name it** – a zone lights up on the radar; pick its name from four nearby callouts (keys `1`–`4`). The easier drill, so it comes before Find it.
+- **Find it** – you get a name and click anywhere inside its zone. A click just outside the edge is a **Close** and still counts as correct, and clicking a zone that goes by one of the target's other names (B Short for Catwalk on Mirage) is a hit. Otherwise you see how many metres outside it you were and which zone you clicked, outlined on the radar.
 - **Edit** – select a zone, drag inside it to move it, drag a corner to resize it, or drag the round handle to move its name. Rectangles stay rectangles; **Add corner** (or a double-click on an edge) turns one into a free shape for the rare zone that needs it, and **Make rectangle** turns it back. Then copy or download that map's data.
 
 Zones are rectangles by default and don't need to cover the whole map. They are layered: **areas** (rooms, corridors, site zones) never overlap each other, and **spots** (boxes, corners, small positions) sit on top. Clicking a spot that lies inside an area counts for both: Default on A Site is a correct answer for *A Site* and for *Default*.
 
-Rounds are 10, 20 or every callout on the map. Callouts you miss come up more often, and a callout counts as learned after three correct answers in a row. Progress and edits are stored in the browser (localStorage). Two-level maps (Nuke, Vertigo) switch levels automatically during quizzes.
+Rounds are 10, 20 or every callout on the map. Callouts you missed last time come back first (up to 40% of a round, most-missed first), the rest of the round favours weak callouts over new ones, and a callout counts as learned after three correct answers in a row. The quiz setup shows how many callouts on the map are learned, still being learned and new, with a link to reset that map's progress. Progress and edits are stored in the browser (localStorage). Two-level maps (Nuke, Vertigo) switch levels automatically during quizzes.
 
 Links are shareable: `#mirage/find`, `#nuke/explore`, and so on.
 

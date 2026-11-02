@@ -239,6 +239,15 @@ button { cursor: pointer; }
 .card .alt { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
 .card p.desc { margin: 8px 0 0; }
 .card .meta { margin-top: 10px; color: var(--muted); font-size: 13px; }
+.card .meta .status { color: var(--text); }
+
+/* Quiz setup: progress breakdown and reset */
+.breakdown { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.breakdown .counts { margin: 0; color: var(--muted); font: 600 19px/1.2 var(--display); }
+.breakdown .n-learned { color: var(--ct-blue); font-weight: 700; }
+.breakdown .n-learning { color: var(--t-gold); }
+.link-btn { padding: 2px 0; border: 0; background: none; color: var(--muted); font-size: 13px; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.link-btn:hover { color: var(--text); }
 /* Explore: keep the selected callout in view while the list scrolls under it. */
 .card.is-sticky { position: sticky; top: 0; z-index: 1; box-shadow: 0 0 0 20px var(--panel); }
 
@@ -269,6 +278,7 @@ button { cursor: pointer; }
 .result h4 { margin: 0; font: 700 22px/1.1 var(--display); }
 .result p { margin: 4px 0 0; color: var(--muted); }
 .result p strong { color: var(--text); font-weight: 600; }
+.result p.alt { font-size: 14px; }
 
 .choices { display: grid; gap: 8px; }
 .choice {
