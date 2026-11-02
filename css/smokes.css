@@ -1,0 +1,116 @@
+/* Smokes mode (js/smokes.js): line-up list, detail card and the radar layer */
+:root {
+  --smoke: #cfd6de;
+  --smoke-fill: rgba(207, 214, 222, 0.16);
+  --smoke-fill-on: rgba(207, 214, 222, 0.36);
+}
+
+/* Zones are only a backdrop here, and their names stay off. */
+.mode-smokes .zone { opacity: .35; }
+.mode-smokes .label { display: none !important; }
+.mode-smokes .radar { cursor: pointer; }
+
+/* Panel: filters */
+.smk-ctrl { flex-wrap: nowrap; }
+.smk-ctrl .field-label { flex: none; width: 58px; }
+.smk-ctrl .seg button { padding: 0 14px; }
+.flt-chip {
+  height: 32px; padding: 0 14px;
+  border: 1px solid var(--line); border-radius: 999px;
+  background: transparent; color: var(--muted);
+  font: 600 15px/1 var(--display);
+}
+.flt-chip:hover { color: var(--text); border-color: var(--muted); }
+.flt-chip[aria-pressed="true"] { background: var(--raised); color: var(--text); border-color: var(--smoke); }
+.flt-chip[aria-pressed="true"]:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; box-shadow: 0 0 0 2px var(--ink-deep); }
+
+/* Panel: grouped list */
+.smk-groups { display: flex; flex-direction: column; gap: 4px; }
+.smk-group { margin: 6px 0 0; color: var(--muted); font: 600 12px/1.2 var(--body); text-transform: uppercase; letter-spacing: .06em; }
+.smk-list { list-style: none; margin: 0 -8px; padding: 0; }
+.smk-list button {
+  width: 100%; display: flex; align-items: baseline; gap: 8px;
+  padding: 6px 8px; border: 0; border-radius: var(--radius-s);
+  background: transparent; text-align: left;
+}
+.smk-list button:hover, .smk-list button.is-active { background: var(--raised); }
+.smk-list .sd { flex: none; width: 22px; font: 700 13px/1 var(--display); color: var(--t-gold); }
+.smk-list .side-ct .sd { color: var(--ct-dot); }
+.smk-list .nm { flex: none; font: 600 17px/1.2 var(--display); }
+.smk-list .from { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 13px; }
+.smk-list .tq {
+  margin-left: auto; flex: none; padding: 1px 7px;
+  border: 1px solid var(--line); border-radius: 999px;
+  font: 600 12px/1.3 var(--display); color: var(--muted);
+}
+.smk-list .tq.is-move { border-color: var(--t-gold); color: var(--text); }
+.smk-list .unv { flex: none; width: 12px; color: var(--muted); font-size: 13px; }
+.smk-list .ms { flex: none; align-self: center; width: 28px; height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.smk-list .ms i { display: block; height: 100%; background: var(--ct-blue); }
+
+/* Panel: detail card */
+.smk-head { display: flex; align-items: center; gap: 10px; }
+.smk-head h3 { flex: 1; min-width: 0; }
+.chip.ct { background: var(--ct-blue-soft); color: var(--ct-dot); }
+.smk-rows { margin: 12px 0 0; display: flex; flex-direction: column; gap: 8px; }
+.smk-row { display: grid; grid-template-columns: 64px 1fr; gap: 8px; align-items: baseline; }
+.smk-k { color: var(--muted); font: 600 12px/1.4 var(--body); text-transform: uppercase; letter-spacing: .06em; }
+.smk-row dd { margin: 0; font-size: 15px; color: var(--text); }
+.smk-row dd.smk-aim, .smk-aim { font: 600 20px/1.2 var(--display); }
+.smk-techs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tech {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px;
+  font: 600 14px/1.2 var(--display); color: var(--text);
+}
+.tech .g { font-size: 14px; line-height: 1; }
+.tech.is-move { border-color: var(--t-gold); }
+.smk-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.acc { padding: 1px 8px; border: 1px dashed var(--muted); border-radius: 999px; color: var(--muted); font-size: 12.5px; }
+.acc.checked { border: 0; background: var(--ct-blue-soft); color: var(--ct-dot); }
+.smk-wrong { color: var(--muted); text-decoration: none; }
+.smk-wrong:hover { color: var(--text); text-decoration: underline; }
+.smk-empty code { font-size: 13px; }
+.smk-empty a { color: var(--t-gold); }
+
+/* Radar */
+.smk-layer { pointer-events: none; }
+.smk-land { fill: var(--smoke-fill); stroke: var(--smoke); stroke-opacity: .55; stroke-width: 1.5; vector-effect: non-scaling-stroke; transition: opacity .15s; }
+.smk-land.is-focus { fill: var(--smoke-fill-on); stroke: var(--text); stroke-opacity: 1; stroke-width: 2; }
+.smk-land.is-sel { fill: var(--smoke-fill-on); stroke-opacity: 1; stroke-width: 2.5; }
+.smk-land.is-sel.t { stroke: var(--t-gold); }
+.smk-land.is-sel.ct { stroke: var(--ct-dot); }
+.smk-count circle { fill: var(--ink-deep); stroke: var(--smoke); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.smk-count text { fill: var(--text); font-family: var(--display); font-weight: 700; text-anchor: middle; dominant-baseline: central; }
+.smk-arc { fill: none; stroke-width: 1.5; stroke-linecap: round; opacity: .6; vector-effect: non-scaling-stroke; }
+.smk-arc.t { stroke: var(--t-gold); }
+.smk-arc.ct { stroke: var(--ct-dot); }
+.smk-arc.is-sel { stroke-width: 2.5; stroke-dasharray: 6 5; opacity: 1; }
+.smk-casing { stroke-width: 4.5; opacity: .6; }
+.smk-casing.is-sel { opacity: 1; stroke-width: 5.5; }
+.smk-layer path.is-draw { stroke-dasharray: var(--len) var(--len); animation: smk-draw .5s ease-out both; }
+@keyframes smk-draw { from { stroke-dashoffset: var(--len); } to { stroke-dashoffset: 0; } }
+.smk-throw { fill: var(--ink-deep); fill-opacity: .6; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.smk-throw.t { stroke: var(--t-gold); }
+.smk-throw.ct { stroke: var(--ct-dot); }
+.smk-throw.is-sel { fill-opacity: 1; stroke: var(--ink-deep); }
+.smk-throw.is-sel.t { fill: var(--t-gold); }
+.smk-throw.is-sel.ct { fill: var(--ct-dot); }
+.smk-face { stroke-width: 2.5; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.smk-face.t { stroke: var(--t-gold); }
+.smk-face.ct { stroke: var(--ct-dot); }
+.smk-hit { fill: transparent; stroke: none; }
+
+/* Focus: the other landings step back. Selection: everything but the line-up steps back further. */
+.smk-layer.has-focus .smk-land:not(.is-focus), .smk-layer.has-focus .smk-count:not(.is-focus) { opacity: .25; }
+.smk-layer.has-sel .smk-land:not(.is-sel), .smk-layer.has-sel .smk-count,
+.smk-layer .is-dim { opacity: .15; }
+
+@media (max-width: 860px) {
+  .mode-smokes .panel-body .kbd-hint { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .smk-layer path.is-draw { animation: none; stroke-dasharray: none; }
+  .smk-land { transition: none; }
+}
