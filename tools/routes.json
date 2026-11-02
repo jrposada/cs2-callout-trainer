@@ -1,0 +1,79 @@
+{
+  "_about": "Spawns and early-round targets for tools/make_routes.py. Targets are callout ids from data/maps.js; a target can be {\"to\": id, \"via\": [[x, y], [x, y, \"lower\"]]} to force waypoints (a third value switches level there). \"mask\": {level: {\"open\": [[x0, y0, x1, y1]], \"block\": [...]}} patches the walkable floor taken from the radar.",
+  "mirage": {
+    "spawns": {"T": {"x": 900, "y": 368}, "CT": {"x": 294, "y": 721}},
+    "targets": {
+      "T": ["top-mid", "mid", "catwalk", "a-ramp", "palace", "b-apartments", "underpass"],
+      "CT": ["sniper-s-nest", "jungle", "connector", "stairs", "ticket-booth", "market", "b-short", "b-site"]
+    }
+  },
+  "dust2": {
+    "spawns": {"T": {"x": 394, "y": 928}, "CT": {"x": 616, "y": 199}},
+    "targets": {
+      "T": ["top-mid", "mid-doors", "catwalk", "outside-long", "long-doors", "upper-b-tunnels", "lower-b-tunnels"],
+      "CT": ["long-doors", "blue", "a-cross", "a-short", "ct-mid", "close-mid-doors", "b-doors", "b-window"]
+    }
+  },
+  "inferno": {
+    "spawns": {"T": {"x": 105, "y": 715}, "CT": {"x": 909, "y": 349}},
+    "targets": {
+      "T": ["banana", "logs", "t-apartments", "balcony-t", "second-mid", "mid", "top-mid", "bottom-mid"],
+      "CT": ["car", "sand-bags-banana", "logs", "coffins", "top-mid", "a-long", "a-short", "pit", "arch"]
+    }
+  },
+  "nuke": {
+    "spawns": {"T": {"x": 207, "y": 567}, "CT": {"x": 849, "y": 471}},
+    "mask": {"upper": {"wall_contrast": 35}},
+    "targets": {
+      "T": ["lobby", {"to": "outside", "via": [[520, 712]]}, "silo", "t-red", "ramp", "squeaky", "hut", "radio",
+            {"to": "bottom-ramp", "via": [[484, 625], [500, 642, "lower"]]}],
+      "CT": ["outside", "garage", "ct-red", "heaven", "hut", "squeaky", "main"]
+    }
+  },
+  "ancient": {
+    "spawns": {"T": {"x": 497, "y": 893}, "CT": {"x": 517, "y": 152}},
+    "targets": {
+      "T": ["a-main", "elbow", "mid", "top-mid", "ruins", "doors", "water", "tunnels"],
+      "CT": ["top-mid", "mid", "short", "long", "a-site", "ramp", "house", "dark", "b-site"]
+    }
+  },
+  "anubis": {
+    "spawns": {"T": {"x": 526, "y": 931}, "CT": {"x": 436, "y": 209}},
+    "targets": {
+      "T": ["top-mid", "alley", "ruins", "b-long", "water", "bridge", "stairs", "wood"],
+      "CT": ["middle", "bridge", "double-doors", "a-connector", "main", "heaven-a", "b-site", "street"]
+    }
+  },
+  "overpass": {
+    "spawns": {"T": {"x": 682, "y": 936}, "CT": {"x": 578, "y": 116}},
+    "targets": {
+      "T": ["fountain", "playground", "party", "lower-tunnels", "connector", "monster"],
+      "CT": ["a-long", "toilets", "connector", "monster", "sandbags", "bridge", "heaven", "pillar"]
+    }
+  },
+  "train": {
+    "spawns": {"T": {"x": 136, "y": 183}, "CT": {"x": 916, "y": 855}},
+    "targets": {
+      "T": ["a-main", "ivy", "popdog", "brown-halls", "b-halls", "upper-b", "b-ramp", "ladder"],
+      "CT": ["ivy", "bomb-train-a", "z-connector", "ladder", "upper-b", "b-ramp", "red-b"]
+    }
+  },
+  "vertigo": {
+    "spawns": {"T": {"x": 389, "y": 755}, "CT": {"x": 553, "y": 251}},
+    "mask": {"upper": {"open": [[486, 712, 512, 740]]}},
+    "targets": {
+      "T": ["a-ramp", "sand-bags", "t-stairs", "mid", "t-mid", "stairs", "ladder",
+            {"to": "b-stairs", "via": [[250, 650], [250, 650, "lower"], [200, 470], [200, 470, "upper"]]},
+            {"to": "underpass", "via": [[429, 612], [415, 612, "lower"]]}],
+      "CT": ["top-mid", "mid", "elevator", "door", "heaven", "a-site", "connector", "b-stairs"]
+    }
+  },
+  "cache": {
+    "spawns": {"T": {"x": 866, "y": 597}, "CT": {"x": 96, "y": 570}},
+    "mask": {"upper": {"wall_contrast": 35}},
+    "targets": {
+      "T": ["a-main", "squeaky", "mid", "garage", "b-main", "checkers", "b-halls"],
+      "CT": ["highway", "ct-connector", "white-box", "mid", "heaven", "b-site", "a-site", "squeaky", "b-main"]
+    }
+  }
+}
