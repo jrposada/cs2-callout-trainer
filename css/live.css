@@ -1,8 +1,4 @@
 /* Live mode (js/live.js): round clock, route list and moving dots */
-.modes { grid-template-columns: repeat(5, 1fr); }
-
-:root { --ct-dot: #8fb0ee; }
-
 /* Panel */
 .live-top { display: flex; flex-direction: column; gap: 10px; }
 .live-clock {

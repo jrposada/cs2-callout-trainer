@@ -55,8 +55,10 @@
   const TOUCH = window.matchMedia && matchMedia("(pointer: coarse)").matches;
   const NARROW = window.matchMedia ? matchMedia("(max-width: 860px)") : { matches: false };
   const MASTER_STREAK = 3;
-  // Extra modes from other scripts (js/live.js): window.CCT_MODES[id] = { init, render, leave, rescale, busy }.
+  // Extra modes from other scripts (js/live.js, js/smokes.js): window.CCT_MODES[id] = { init, render, leave,
+  // rescale, busy, and optionally click(p), escape() -> handled?, route(arg), hashArg() -> string, zones }.
   const EXT = window.CCT_MODES || {};
+  const ext = () => EXT[state.mode] || null;
   const MODES = ["explore", "find", "name", "edit", ...Object.keys(EXT)];
   const extLeave = () => { for (const k in EXT) if (EXT[k].leave) EXT[k].leave(); };
 
@@ -466,7 +468,8 @@
     layerMarkers.textContent = "";
     layerEdit.textContent = "";
     state.hover = null;
-    const showAll = state.mode === "explore" || state.mode === "edit";
+    // An extra mode with zones: true gets the zones as a backdrop (no names unless hovered or selected).
+    const showAll = state.mode === "explore" || state.mode === "edit" || !!(ext() && ext().zones);
     svg.classList.toggle("show-labels", state.mode === "edit" || (state.mode === "explore" && prefs.labels));
     if (!showAll) return;
     const q = state.search.trim().toLowerCase();
@@ -716,7 +719,9 @@
 
   function updateHash() {
     if (!state.map) return;
-    const h = `#${state.map.id}/${state.mode}`;
+    // An extra mode can add a third segment, e.g. #mirage/smokes/<line-up id>.
+    const x = ext(), arg = x && x.hashArg ? x.hashArg() : "";
+    const h = `#${state.map.id}/${state.mode}${arg ? "/" + arg : ""}`;
     if (location.hash !== h) history.replaceState(null, "", h);
   }
 
@@ -820,6 +825,7 @@
 
   // Escape undoes one thing at a time: the Edit point, then the search, then the selection.
   function escapeStep() {
+    if (ext() && ext().escape) return !!ext().escape();
     if (state.mode === "edit" && state.vertex != null) { state.vertex = null; renderHandles(); renderPanel(); return true; }
     if (state.mode === "explore" && state.search) { state.search = ""; renderMarkers(); renderPanel(); return true; }
     if ((state.mode === "explore" || state.mode === "edit") && state.selected) {
@@ -1193,6 +1199,7 @@
   }
 
   function onMapClick(p) {
+    if (ext() && ext().click) { ext().click(p); return; }
     if (state.mode === "explore" || state.mode === "edit") {
       const hit = calloutAt(p);
       if (hit) selectCallout(hit.id, false);
@@ -1400,9 +1407,18 @@
   });
 
   // ---------- boot ----------
+  // Fit the view around a radar-px box [x0, y0, x1, y1], padded by a share of its size on each side.
+  function fitBox(b, pad = 0.15) {
+    const w = Math.max(b[2] - b[0], 1), h = Math.max(b[3] - b[1], 1);
+    setView([b[0] - w * pad, b[1] - h * pad, w * (1 + 2 * pad), h * (1 + 2 * pad)]);
+  }
   // What extra modes get to use. setLevel here also redraws, like the level buttons.
   const api = {
-    state, prefs, panel, svg, $, el, esc, toast, unit, levelName, ensureVisible, NARROW,
+    state, prefs, panel, svg, $, el, esc, toast, unit, levelName, ensureVisible, NARROW, TOUCH, MASTER_STREAK,
+    centerOn, fitView, setView, fitBox, clientToSvg, announce, canLeave, updateHash,
+    // Game units to radar px on the current map, and radar px to whole metres.
+    unitsToPx: (u) => u / state.map.scale,
+    meters,
     savePrefs: () => store.set(K.prefs, prefs),
     setLevel: (lv) => { setLevel(lv); renderMarkers(); renderPanel(); },
     callout: (id) => state.map.callouts.find((c) => c.id === id),
@@ -1410,18 +1426,33 @@
   for (const k in EXT) if (EXT[k].init) EXT[k].init(api);
   function boot() {
     if (!MAPS.length) { panel.textContent = "No map data found. Check that data/maps.js loads."; return; }
-    const [hMap, hMode] = location.hash.replace(/^#/, "").split("/");
+    const [hMap, hMode, ...rest] = location.hash.replace(/^#/, "").split("/");
     state.mode = MODES.includes(hMode) ? hMode : MODES.includes(prefs.mode) ? prefs.mode : "explore";
     selectMap(MAPS.some((m) => m.id === hMap) ? hMap : prefs.map);
+    routeExt(hMode === state.mode ? rest.join("/") : "");
+  }
+  // Hand the hash's third segment to an extra mode that takes one, then write the hash it settles on.
+  function routeExt(arg) {
+    const x = ext();
+    if (!x || !x.route) return;
+    let a = arg || "";
+    try { a = decodeURIComponent(a); } catch { /* keep it raw */ }
+    x.route(a);
+    updateHash();
   }
   window.addEventListener("hashchange", () => {
-    const [hMap, hMode] = location.hash.replace(/^#/, "").split("/");
+    const [hMap, hMode, ...rest] = location.hash.replace(/^#/, "").split("/");
+    const arg = rest.join("/");
     const newMap = state.map && hMap && hMap !== state.map.id && MAPS.some((m) => m.id === hMap);
     const newMode = hMode && hMode !== state.mode && MODES.includes(hMode);
-    if (!newMap && !newMode) return;
+    // Same map and mode, but a new third segment (a hand-edited line-up id, say).
+    const x = ext();
+    const newArg = !newMap && !newMode && hMode === state.mode && !!x && !!x.route && arg !== (x.hashArg ? x.hashArg() || "" : "");
+    if (!newMap && !newMode && !newArg) return;
     if (!canLeave("hash:" + location.hash)) return updateHash(); // restore the hash of the round we kept
     if (newMap) selectMap(hMap);
     if (newMode) setMode(hMode);
+    routeExt(arg);
   });
   boot();
 })();
