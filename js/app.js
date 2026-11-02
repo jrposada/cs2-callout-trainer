@@ -56,7 +56,7 @@
   const NARROW = window.matchMedia ? matchMedia("(max-width: 860px)") : { matches: false };
   const MASTER_STREAK = 3;
   // Extra modes from other scripts (js/live.js, js/smokes.js): window.CCT_MODES[id] = { init, render, leave,
-  // rescale, busy, and optionally click(p), escape() -> handled?, route(arg), hashArg() -> string }.
+  // rescale, busy, and optionally click(p), escape() -> handled?, route(arg), hashArg() -> string, zones }.
   const EXT = window.CCT_MODES || {};
   const ext = () => EXT[state.mode] || null;
   const MODES = ["explore", "find", "name", "edit", ...Object.keys(EXT)];
@@ -468,7 +468,8 @@
     layerMarkers.textContent = "";
     layerEdit.textContent = "";
     state.hover = null;
-    const showAll = state.mode === "explore" || state.mode === "edit";
+    // An extra mode with zones: true gets the zones as a backdrop (no names unless hovered or selected).
+    const showAll = state.mode === "explore" || state.mode === "edit" || !!(ext() && ext().zones);
     svg.classList.toggle("show-labels", state.mode === "edit" || (state.mode === "explore" && prefs.labels));
     if (!showAll) return;
     const q = state.search.trim().toLowerCase();
