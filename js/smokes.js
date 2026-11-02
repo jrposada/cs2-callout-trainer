@@ -1,6 +1,8 @@
 // Smokes mode: well-known smoke line-ups on the radar. Browse them by side and target, pick a landing
 // spot to see where it is thrown from, and pick a throw spot for how to throw it. Drill asks where you
 // stand to throw a smoke (scored by distance), then which throw it is (a bonus, not scored).
+// Each line-up can have two in-game screenshots (where to stand, where to aim), shown on its card,
+// in the drill reveal and in a lightbox.
 // Line-ups come from data/smokes.js (window.CALLOUT_SMOKES). Like js/live.js, this file loads before
 // js/app.js, registers itself in window.CCT_MODES, and gets the app's helpers through init(api).
 (() => {
@@ -11,17 +13,33 @@
   const SITE_NAME = { a: "A", mid: "Mid", b: "B" };
   const SITE_HEAD = { a: "A site", mid: "Mid", b: "B site" };
   const SIDE_NAME = { t: "T", ct: "CT" };
-  // Throw techniques, in the order the drill offers them. Movement throws stand out on the card.
-  const THROWS = [
-    { id: "left", name: "Left click", short: "Left", glyph: "◐" },
-    { id: "right", name: "Right click", short: "Right", glyph: "◑" },
-    { id: "leftright", name: "Left+Right", short: "L+R", glyph: "●" },
-    { id: "jump", name: "Jump-throw", short: "Jump", glyph: "↑", move: true },
-    { id: "runjump", name: "Run+Jump", short: "Run+Jump", glyph: "↗", move: true },
-    { id: "walk", name: "Walk + throw", short: "Walk", glyph: "→", move: true },
-  ];
-  const throwOf = (id) => THROWS.find((t) => t.id === id);
-  const STANCES = { standing: "Standing", crouch: "Crouch" };
+  // How a line-up is thrown: one value per facet (`technique` in data/smokes.js).
+  const CLICKS = { left: "Left click", right: "Right click", both: "Left+Right click" };
+  const CLICK_SHORT = { left: "Left", right: "Right", both: "L+R" };
+  const MOVES = { stand: "Standing", walk: "Walking", run: "Running" };
+  // One short name for compact places (list rows, the drill), e.g. "Jump · Left", "Run-jump · Left".
+  function techLabel(t) {
+    const how = t.jump
+      ? (t.crouch ? "Crouch-jump" : t.move === "run" ? "Run-jump" : t.move === "walk" ? "Walk-jump" : "Jump")
+      : t.crouch ? (t.move === "stand" ? "Crouch" : `Crouch-${t.move}`)
+      : t.move === "run" ? "Run" : t.move === "walk" ? "Walk" : "Stand";
+    return `${how} · ${CLICK_SHORT[t.click]}`;
+  }
+  // Throws that need movement stand out (gold border), as they are the easy ones to get wrong.
+  const isMove = (t) => t.jump || t.move !== "stand";
+  // Common throws the "Which throw?" bonus draws its wrong answers from.
+  const TECH_POOL = [
+    ["left", "stand", false, false], ["right", "stand", false, false], ["both", "stand", false, false],
+    ["left", "stand", true, false], ["left", "run", true, false], ["left", "walk", false, false],
+    ["left", "stand", false, true], ["right", "stand", false, true], ["left", "walk", true, false],
+  ].map(([click, move, jump, crouch]) => techLabel({ click, move, jump, crouch }));
+  const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  // A tiny mouse with the pressed button(s) filled.
+  const mouseSvg = (click) => `<svg class="mouse" viewBox="0 0 12 16" aria-hidden="true"><rect x="0.75" y="0.75" width="10.5" height="14.5" rx="5.25"/>${
+    click !== "right" ? `<path class="on" d="M6 1.5A4.5 4.5 0 0 0 1.5 6v1H6z"/>` : ""}${click !== "left" ? `<path class="on" d="M6 1.5A4.5 4.5 0 0 1 10.5 6v1H6z"/>` : ""
+  }<path class="ln" d="M6 .75V7.25M.75 7.25h10.5"/></svg>`;
+  const HOWTO_URL = "https://github.com/jrposada/cs2-callout-trainer#adding-line-up-screenshots";
+  const SHOT_LABEL = { stand: "Where to stand", aim: "Where to aim" };
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
   const LAND_U = 144;  // a smoke's radius on the radar, in game units
@@ -78,8 +96,18 @@
     if (!r || typeof r.id !== "string" || !r.id) return "no id";
     if (!SIDE_NAME[r.side]) return `side "${r.side}"`;
     if (!SITE_NAME[r.site]) return `site "${r.site}"`;
-    if (!throwOf(r.throw)) return `throw "${r.throw}"`;
-    if (!STANCES[r.stance]) return `stance "${r.stance}"`;
+    const t = r.technique;
+    if (!t || typeof t !== "object") return "no technique";
+    if (!CLICKS[t.click]) return `technique.click "${t.click}"`;
+    if (!MOVES[t.move]) return `technique.move "${t.move}"`;
+    if (typeof t.jump !== "boolean") return "technique.jump must be true or false";
+    if (typeof t.crouch !== "boolean") return "technique.crouch must be true or false";
+    const sh = r.shots;
+    if (sh != null) {
+      if (typeof sh !== "object") return "shots must be an object";
+      for (const k of ["stand", "aim"]) if (sh[k] != null && sh[k] !== true && (typeof sh[k] !== "string" || !sh[k])) return `shots.${k} must be true or a path`;
+      if (sh.aimAt != null && !(Array.isArray(sh.aimAt) && sh.aimAt.length === 2 && sh.aimAt.every((v) => Number.isFinite(v) && v >= 0 && v <= 1))) return "shots.aimAt must be [x, y] between 0 and 1";
+    }
     if (r.status !== "unverified" && r.status !== "checked") return `status "${r.status}"`;
     if (r.status === "checked" && !/^\d{4}-\d{2}$/.test(r.checked || "")) return "checked needs a YYYY-MM date";
     if (!r.to || !A.callout(r.to.callout)) return `landing callout "${r.to && r.to.callout}" not on this map`;
@@ -88,6 +116,12 @@
   }
   function point(spec, c) {
     return { callout: c.id, name: c.name, x: Number.isFinite(spec.x) ? spec.x : c.x, y: Number.isFinite(spec.y) ? spec.y : c.y, level: spec.level || c.level || "upper" };
+  }
+  // Screenshot URLs (or null): true in the data means the usual file name.
+  function shotsOf(r, mapId) {
+    const sh = r.shots || {};
+    const url = (k) => (sh[k] === true ? `img/smokes/${mapId}/${r.id}-${k}.webp` : typeof sh[k] === "string" ? sh[k] : null);
+    return { stand: url("stand"), aim: url("aim"), aimAt: Array.isArray(sh.aimAt) ? sh.aimAt : [0.5, 0.5] };
   }
   function rawFor(mapId) {
     const D = window.CALLOUT_SMOKES;
@@ -104,7 +138,7 @@
         if (!warned.has(k)) { warned.add(k); console.warn(`Smokes: skipped line-up ${k}: ${bad}.`); }
         continue;
       }
-      out.push({ ...r, to: point(r.to, A.callout(r.to.callout)), from: point(r.from, A.callout(r.from.callout)) });
+      out.push({ ...r, to: point(r.to, A.callout(r.to.callout)), from: point(r.from, A.callout(r.from.callout)), shots: shotsOf(r, m.id) });
     }
     const so = { a: 0, mid: 1, b: 2 };
     return out.sort((x, y) => so[x.site] - so[y.site] || (x.side === y.side ? 0 : x.side === "t" ? -1 : 1) || x.name.localeCompare(y.name));
@@ -310,9 +344,121 @@
     const body = `Line-up: ${m.id}/${l.id} (${l.name}, from ${l.from.name})\n\nWhat's wrong:\n\n\nMap version or date you played it:\n\nClip or screenshot (if any):\n`;
     return `${ISSUE_URL}?title=${encodeURIComponent(`Smoke line-up wrong: ${m.id}/${l.id}`)}&body=${encodeURIComponent(body)}`;
   }
+  // One chip per facet: [Left click] [Standing] [Jump-throw] (+ [Crouch]).
   function techChips(l) {
-    const t = throwOf(l.throw);
-    return `<span class="tech${t.move ? " is-move" : ""}"><span class="g" aria-hidden="true">${t.glyph}</span>${t.name}</span><span class="tech">${STANCES[l.stance]}</span>`;
+    const t = l.technique;
+    return `<span class="tech tech-click">${mouseSvg(t.click)}${CLICKS[t.click]}</span>`
+      + `<span class="tech${t.move !== "stand" ? " is-move" : ""}">${MOVES[t.move]}</span>`
+      + (t.jump ? `<span class="tech is-move">Jump-throw</span>` : "")
+      + (t.crouch ? `<span class="tech">Crouch</span>` : "");
+  }
+
+  // ---------- screenshots ----------
+  const missingShots = new Set(); // URLs that failed to load, so a redraw goes straight to the placeholder
+  function shotFig(l, kind, cls = "") {
+    const url = l.shots[kind], ok = url && !missingShots.has(url);
+    const [ax, ay] = l.shots.aimAt;
+    const ring = kind === "aim" ? `<span class="smk-ring" style="left:${ax * 100}%;top:${ay * 100}%" aria-hidden="true"></span>` : "";
+    return `<figure class="smk-shot ${cls}${ok ? "" : " is-missing"}" data-kind="${kind}">
+        <div class="smk-frame">
+          ${ok ? `<button type="button" class="smk-thumb" data-shot="${kind}" aria-label="${SHOT_LABEL[kind]}: open the screenshot"><img src="${esc(url)}" alt="" loading="lazy" decoding="async">${ring}</button>` : ""}
+          <div class="smk-missing"><span>Screenshot needed</span><a href="${HOWTO_URL}" target="_blank" rel="noopener">How to add</a></div>
+        </div>
+        <figcaption>${SHOT_LABEL[kind]}</figcaption>
+      </figure>`;
+  }
+  // Wire up the thumbnails just drawn: a file that doesn't load turns into the placeholder.
+  function bindShots(l) {
+    A.panel.querySelectorAll(".smk-thumb").forEach((b) => {
+      const img = b.querySelector("img"), fig = b.closest(".smk-shot");
+      const fail = () => {
+        const url = l.shots[fig.dataset.kind];
+        if (!missingShots.has(url)) { missingShots.add(url); console.warn(`Smokes: screenshot not found: ${url}`); }
+        const had = document.activeElement === b;
+        fig.classList.add("is-missing");
+        b.remove();
+        if (had) A.panel.focus && A.panel.focus();
+      };
+      img.addEventListener("error", fail, { once: true });
+      if (img.complete && img.src && !img.naturalWidth) fail();
+      b.onclick = () => openLightbox(l, b.dataset.shot, b);
+    });
+  }
+
+  // Lightbox: an accessible dialog with the full screenshot. Esc closes, arrows switch stand / aim.
+  let LB = null;
+  function openLightbox(l, kind, opener) {
+    const items = ["stand", "aim"].filter((k) => l.shots[k] && !missingShots.has(l.shots[k]));
+    if (!items.length) return;
+    closeLightbox(false);
+    const el = document.createElement("div");
+    el.className = "smk-lb";
+    el.setAttribute("role", "dialog");
+    el.setAttribute("aria-modal", "true");
+    el.setAttribute("aria-labelledby", "smkLbTitle");
+    document.body.appendChild(el);
+    LB = { el, l, items, i: Math.max(0, items.indexOf(kind)), opener };
+    el.addEventListener("click", (e) => {
+      if (e.target === el) return closeLightbox(true);
+      const b = e.target.closest("button");
+      if (!b) return;
+      if (b.classList.contains("smk-lb-close")) closeLightbox(true);
+      else if (b.dataset.k) showLb(items.indexOf(b.dataset.k));
+    });
+    document.addEventListener("keydown", lbKey, true);
+    drawLb();
+    el.querySelector(".smk-lb-close").focus();
+    A.announce(`${l.name}: ${SHOT_LABEL[items[LB.i]]}.`);
+  }
+  function drawLb() {
+    const { el, l, items, i } = LB, k = items[i];
+    const [ax, ay] = l.shots.aimAt;
+    const text = k === "stand" ? `${l.from.name}. ${l.stand}` : l.aim;
+    el.innerHTML = `<div class="smk-lb-box">
+        <div class="smk-lb-top">
+          <h2 id="smkLbTitle">${esc(l.name)} <span>· ${SHOT_LABEL[k]}</span></h2>
+          <button type="button" class="btn small smk-lb-close" aria-label="Close">✕</button>
+        </div>
+        <div class="smk-lb-media"><span class="smk-lb-pic"><img src="${esc(l.shots[k])}" alt="${SHOT_LABEL[k]} for the ${esc(l.name)} smoke, from ${esc(l.from.name)}">${k === "aim" ? `<span class="smk-ring" style="left:${ax * 100}%;top:${ay * 100}%" aria-hidden="true"></span>` : ""}</span></div>
+        <p class="smk-lb-cap"><span class="smk-k">${k === "stand" ? "Stand" : "Aim"}</span> ${esc(text)}</p>
+        ${items.length > 1 ? `<div class="row smk-lb-nav"><div class="seg" role="group" aria-label="Screenshot">${items.map((x) => `<button type="button" data-k="${x}" aria-pressed="${x === k}">${SHOT_LABEL[x]}</button>`).join("")}</div><span class="kbd-hint"><kbd>←</kbd> <kbd>→</kbd> switch, <kbd>Esc</kbd> close</span></div>` : ""}
+      </div>`;
+  }
+  function showLb(i) {
+    if (!LB || i < 0 || i === LB.i) return;
+    const k = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.k : null;
+    LB.i = i;
+    drawLb();
+    const f = (k && LB.el.querySelector(`button[data-k="${LB.items[i]}"]`)) || LB.el.querySelector(".smk-lb-close");
+    f.focus();
+    A.announce(SHOT_LABEL[LB.items[i]]);
+  }
+  function closeLightbox(returnFocus) {
+    if (!LB) return;
+    const { el, opener } = LB;
+    LB = null;
+    document.removeEventListener("keydown", lbKey, true);
+    el.remove();
+    if (returnFocus && opener && opener.isConnected) opener.focus({ preventScroll: true });
+  }
+  // Captures every key while open, so the app's own keys (Esc, [ ], 1-6...) never fire behind it.
+  function lbKey(e) {
+    if (!LB) return;
+    e.stopPropagation();
+    const el = LB.el;
+    if (e.key === "Escape") { e.preventDefault(); closeLightbox(true); return; }
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      e.preventDefault();
+      const n = LB.items.length;
+      if (n > 1) showLb((LB.i + (e.key === "ArrowRight" ? 1 : -1) + n) % n);
+      return;
+    }
+    if (e.key === "Tab") {
+      const f = [...el.querySelectorAll("button, a[href]")];
+      const i = f.indexOf(document.activeElement);
+      e.preventDefault();
+      f[(i < 0 ? 0 : i + (e.shiftKey ? -1 : 1) + f.length) % f.length].focus();
+    }
   }
   function card(l, cls = "") {
     return `<div class="card smk-card ${cls}">
@@ -321,21 +467,22 @@
       <dl class="smk-rows">
         <div class="smk-row"><dt class="smk-k">Stand</dt><dd>${esc(l.stand)}</dd></div>
         <div class="smk-row"><dt class="smk-k">Aim</dt><dd class="smk-aim">${esc(l.aim)}</dd></div>
-        <div class="smk-row"><dt class="smk-k">Throw</dt><dd class="smk-techs">${techChips(l)}</dd></div>
+        <div class="smk-row"><dt class="smk-k">Technique</dt><dd class="smk-techs">${techChips(l)}</dd></div>
         <div class="smk-row"><dt class="smk-k">Lands</dt><dd>${esc(l.lands)}</dd></div>
       </dl>
+      <div class="smk-shots">${shotFig(l, "stand")}${shotFig(l, "aim")}</div>
       <div class="meta smk-meta">${accBadge(l)}<a class="smk-wrong" href="${esc(issueUrl(l))}" target="_blank" rel="noopener">This line-up is wrong?</a></div>
       <div class="meta"><span class="mode-st">${masteryText(l.id)}</span></div>
     </div>`;
   }
   function row(l) {
-    const t = throwOf(l.throw);
+    const t = l.technique;
     const cls = `side-${l.side}${l.id === S.sel ? " is-active" : ""}${l.status !== "checked" ? " is-unverified" : ""}`;
     return `<li><button type="button" data-id="${esc(l.id)}" class="${cls}"${l.id === S.sel ? ` aria-current="true"` : ""}>
         <span class="sd">${SIDE_NAME[l.side]}</span>
         <span class="nm">${esc(l.name)}</span>
         <span class="from">from ${esc(l.from.name)}</span>
-        <span class="tq${t.move ? " is-move" : ""}">${t.short}</span>
+        <span class="tq${isMove(t) ? " is-move" : ""}">${techLabel(t)}</span>
         <span class="ms" title="Drill: ${stage(l.id)}"><i style="width:${mastery(l.id) * 100}%"></i></span>
         ${l.status !== "checked" ? `<span class="unv" title="Approximate, not checked in game" aria-hidden="true">◌</span><span class="sr-only">, approximate</span>` : ""}
       </button></li>`;
@@ -360,6 +507,7 @@
     if (a.dataset.id) return `.smk-list button[data-id="${CSS.escape(a.dataset.id)}"]`;
     if (a.dataset.site) return `.flt-chip[data-site="${a.dataset.site}"]`;
     if (a.dataset.v && a.parentElement && a.parentElement.id) return `#${a.parentElement.id} button[data-v="${a.dataset.v}"]`;
+    if (a.dataset.shot) return `.smk-thumb[data-shot="${a.dataset.shot}"]`;
     if (a.id) return "#" + a.id;
     return ".smk-list button[data-id]";
   }
@@ -427,6 +575,7 @@
       if (!b) return;
       if (b.dataset.id === S.sel) back(); else select(b.dataset.id, "list");
     };
+    if (sel) bindShots(sel);
     if (keep) {
       const f = A.panel.querySelector(keep);
       if (f) f.focus({ preventScroll: true });
@@ -448,7 +597,6 @@
   function startRound() {
     const pool = all().filter((l) => side() === "both" || l.side === side());
     if (!pool.length) return;
-    const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
     const fresh = shuffle(pool.filter((l) => stage(l.id) !== "learned"));
     const learned = shuffle(pool.filter((l) => stage(l.id) === "learned"));
     const items = shuffle(fresh.concat(learned).slice(0, Math.min(ROUND_MAX, pool.length)));
@@ -472,25 +620,30 @@
     const d = dist(p, l.from), units = d * A.state.map.scale;
     const kind = units <= HIT_U ? "hit" : units <= CLOSE_U ? "close" : "miss";
     q.results[q.i] = { id: l.id, kind, d, p: { x: p.x, y: p.y }, pick: null };
+    // The right throw plus up to five other common ones, in random order.
+    const right = techLabel(l.technique);
+    q.options = shuffle([right, ...shuffle(TECH_POOL.filter((x) => x !== right)).slice(0, 5)]);
     q.phase = "reveal";
     score(l.id, kind === "hit");
     render();
     const R = landR(), xs = [p.x, l.from.x, l.to.x - R, l.to.x + R], ys = [p.y, l.from.y, l.to.y - R, l.to.y + R];
     A.fitBox([Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)], 0.15);
     const m = A.meters(d);
-    A.announce(`${RESULT[kind]}, ${m} metre${m === 1 ? "" : "s"} off. Stand: ${l.stand} Which throw is it? Press 1 to 6.`);
+    A.announce(`${RESULT[kind]}, ${m} metre${m === 1 ? "" : "s"} off. Stand: ${l.stand} Which throw is it? Press 1 to ${q.options.length}.`);
     const f = A.panel.querySelector(".smk-choices .choice");
     if (f) f.focus({ preventScroll: true });
   }
-  function pickThrow(id) {
+  function pickThrow(i) {
     const q = S.round;
-    if (!q || q.done || q.phase !== "reveal") return;
-    const l = cur(), r = q.results[q.i];
-    r.pick = id;
-    r.throwOk = id === l.throw;
+    if (!q || q.done || q.phase !== "reveal" || !q.options[i]) return;
+    const l = cur(), r = q.results[q.i], right = techLabel(l.technique);
+    r.pick = q.options[i];
+    r.throwOk = r.pick === right;
     q.phase = "picked";
     render();
-    A.announce(`${r.throwOk ? "Right" : `No, it's ${throwOf(l.throw).name}`}. Aim: ${l.aim}`);
+    A.announce(`${r.throwOk ? "Right" : `No, it's ${right}`}. Aim: ${l.aim}`);
+    const ab = A.panel.querySelector(".smk-aimblock");
+    if (ab) ab.scrollIntoView({ block: "nearest" });
     const n = A.panel.querySelector("#smkNext");
     if (n) n.focus({ preventScroll: true });
   }
@@ -533,11 +686,14 @@
     if (q.done) return renderSummary();
     const l = cur(), r = q.results[q.i];
     const picked = q.phase === "picked";
-    const choices = `<div class="choices smk-choices" id="smkChoices">${THROWS.map((t, i) => {
+    const right = techLabel(l.technique);
+    const choices = r ? `<div class="choices smk-choices" id="smkChoices">${q.options.map((o, i) => {
       let cls = "choice";
-      if (picked) { if (t.id === l.throw) cls += " right"; else if (r.pick === t.id) cls += " wrong"; }
-      return `<button type="button" class="${cls}" data-throw="${t.id}" ${picked ? "disabled" : ""}><kbd>${i + 1}</kbd>${t.short}</button>`;
-    }).join("")}</div>`;
+      if (picked) { if (o === right) cls += " right"; else if (r.pick === o) cls += " wrong"; }
+      return `<button type="button" class="${cls}" data-i="${i}" ${picked ? "disabled" : ""}><kbd>${i + 1}</kbd>${o}</button>`;
+    }).join("")}</div>` : "";
+    const standShot = l.shots.stand ? shotFig(l, "stand", "smk-dshot") : "";
+    const aimShot = l.shots.aim ? shotFig(l, "aim", "smk-dshot") : "";
     A.panel.innerHTML = `
       ${drillProgress()}
       <div class="prompt">
@@ -545,18 +701,19 @@
         <h2 class="callname" tabindex="-1">${esc(l.name)}</h2>
         <p class="hint"><span class="chip ${l.side}">${SIDE_NAME[l.side]} side</span></p>
       </div>
-      ${r ? `<div class="result ${r.kind}"><h4>${RESULT[r.kind]}</h4><p class="detail">${A.meters(r.d)} m off.</p>${accBadge(l)}
-          <p class="desc"><strong>Stand:</strong> ${esc(l.from.name)}. ${esc(l.stand)}</p></div>
+      ${r ? `<div class="smk-result${standShot ? " has-shot" : ""}"><div class="result ${r.kind}"><h4>${RESULT[r.kind]}</h4><p class="detail">${A.meters(r.d)} m off.</p>${accBadge(l)}
+          <p class="desc"><strong>Stand:</strong> ${esc(l.from.name)}. ${esc(l.stand)}</p></div>${standShot}</div>
         <p class="ask smk-ask">Which throw? <span class="tag-bonus">not scored in streak</span></p>
         ${choices}
-        ${picked ? `<div class="smk-aimblock"><span class="smk-k">Aim</span><p class="smk-aim">${esc(l.aim)}</p><p class="smk-tech-note">${techChips(l)}</p></div>` : ""}`
+        ${picked ? `<div class="smk-aimblock${aimShot ? " has-shot" : ""}">${aimShot}<div class="smk-aimtext"><span class="smk-k">Aim</span><p class="smk-aim">${esc(l.aim)}</p><p class="smk-tech-note">${techChips(l)}</p></div></div>` : ""}`
       : `<p class="kbd-hint smk-hint">${A.TOUCH ? "Tap your throw spot. Drag to pan, pinch to zoom." : "Click your throw spot. Drag to pan, scroll to zoom."}</p>`}
       <div class="step-actions">
         ${picked ? `<div class="row"><button type="button" class="btn primary" id="smkNext">${q.i + 1 < q.items.length ? "Next" : "See results"}</button>${A.TOUCH ? "" : `<span class="kbd-hint"><kbd>Enter</kbd></span>`}</div>` : ""}
         <div class="row"><span class="spacer"></span><button type="button" class="btn quiet small" id="smkQuit">End round</button></div>
       </div>`;
     const ch = A.$("#smkChoices");
-    if (ch) ch.onclick = (e) => { const b = e.target.closest("button[data-throw]"); if (b) pickThrow(b.dataset.throw); };
+    if (ch) ch.onclick = (e) => { const b = e.target.closest("button[data-i]"); if (b) pickThrow(Number(b.dataset.i)); };
+    bindShots(l);
     const nx = A.$("#smkNext");
     if (nx) nx.onclick = nextQuestion;
     A.$("#smkQuit").onclick = endRound;
@@ -689,7 +846,7 @@
     if (!all().length) return;
     const q = S.view === "drill" ? S.round : null;
     if (q && !q.done) {
-      if (q.phase === "reveal" && /^[1-6]$/.test(e.key)) { e.preventDefault(); pickThrow(THROWS[Number(e.key) - 1].id); return; }
+      if (q.phase === "reveal" && /^[1-6]$/.test(e.key)) { e.preventDefault(); pickThrow(Number(e.key) - 1); return; }
       // A focused button clicks itself on Enter, so leave that to the button.
       if (q.phase === "picked" && e.key === "Enter" && !(t && t.matches && t.matches("button, a"))) { e.preventDefault(); nextQuestion(); }
       return; // no side keys while a round is running
@@ -724,6 +881,7 @@
     escape: back,
     // #<map>/smokes/<id> selects that line-up; anything else (or nothing) is plain Browse.
     route(arg) {
+      closeLightbox(false);
       const l = arg && all().find((x) => x.id === arg);
       if (!l) { if (S.view === "browse" && (S.sel || S.focus)) { S.sel = S.focus = null; render(); } return; }
       if (S.view !== "browse") { S.view = "browse"; S.round = null; }
@@ -741,6 +899,7 @@
       S.sel = S.focus = S.drawnFocus = null;
       S.view = "browse";
       S.round = null;
+      closeLightbox(false);
       if (layer) { layer.textContent = ""; layer.style.display = "none"; }
     },
   };
