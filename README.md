@@ -7,10 +7,12 @@ Cobblestone is not included because it is not in CS2, so there is no CS2 radar f
 
 ## Modes
 
+The panel has two rows. The top one picks what you learn, **Callouts** or **Smokes** (see [Smoke line-ups](#smoke-line-ups)), and holds the **Live** button. The row under it picks how: **Explore**, **Name it** or **Find it**. The mode stays when you switch between Callouts and Smokes. Arrow keys move along a row and `Enter` or `Space` switches.
+
 - **Explore** – every callout is a zone on the radar. Hover or tap a zone, or search the list, to see its name, other names and what it is. Toggle all names on or off; names that would overlap stay hidden until you zoom in, and the selected or hovered name always shows.
 - **Name it** – a zone lights up on the radar; pick its name from four nearby callouts (keys `1`–`4`). The easier drill, so it comes before Find it.
 - **Find it** – you get a name and click anywhere inside its zone. A click just outside the edge is a **Close** and still counts as correct, and clicking a zone that goes by one of the target's other names (B Short for Catwalk on Mirage) is a hit. Otherwise you see how many metres outside it you were and which zone you clicked, outlined on the radar.
-- **Edit** – select a zone, drag inside it to move it, drag a corner to resize it, or drag the round handle above its label to move its name. Rectangles stay rectangles; **Add corner** (or a double-click on an edge) turns one into a free shape for the rare zone that needs it, and **Make rectangle** turns it back. **Undo** (or Ctrl/Cmd+Z) steps back through this session's edits, including a whole-map Discard. The Edit tab shows "Edit · N" when the current map has local edits. Then copy or download that map's data.
+- **Edit zones** – the **Edit zones** link in the panel footer (shows `· N` with local edits) opens the zone editor; **Done** goes back. Select a zone, drag inside it to move it, drag a corner to resize it, or drag the round handle above its label to move its name. Rectangles stay rectangles; **Add corner** (or a double-click on an edge) turns one into a free shape for the rare zone that needs it, and **Make rectangle** turns it back. **Undo** (or Ctrl/Cmd+Z) steps back through this session's edits, including a whole-map Discard. Then copy or download that map's data.
 
 Zones are rectangles by default and don't need to cover the whole map. They are layered: **areas** (rooms, corridors, site zones) never overlap each other, and **spots** (boxes, corners, small positions) sit on top. Clicking a spot that lies inside an area counts for both: Default on A Site is a correct answer for *A Site* and for *Default*.
 
@@ -24,22 +26,23 @@ At the end of a round the **summary shows every missed callout on the radar** wi
 
 Progress and edits are stored in the browser (localStorage). Two-level maps (Nuke, Vertigo) switch levels automatically during quizzes.
 
-Links are shareable: `#mirage/find`, `#nuke/explore`, and so on.
+Links are shareable: `#mirage/find`, `#nuke/explore`, `#mirage/smokes/find`, and so on.
 
 ## Live mode
 
-The **Live** tab is for a second screen during a match. Hit **Start** (or `Space`) when freeze time ends and dots run from each spawn along the fastest routes to the early peek spots in real time, with a round clock and a list of arrival times. Filter by side, pick a weapon to rescale the times, or slow playback down to study (`R` resets). Links work too: `#mirage/live`.
+The **Live** button is for a second screen during a match. Hit **Start** (or `Space`) when freeze time ends and dots run from each spawn along the fastest routes to the early peek spots in real time, with a round clock and a list of arrival times. Filter by side, pick a weapon to rescale the times, or slow playback down to study (`R` resets). **Done** (or the Live button again) takes you back to where you were. Links work too: `#mirage/live`.
 
 ## Smoke line-ups
 
-The **Smokes** tab shows where to stand to throw well-known smokes, and how to throw them, on the same radar. Mirage has 11 line-ups so far; other maps show an empty state with a link to Mirage.
+**Smokes** (top row) shows where to stand to throw well-known smokes, and how to throw them, on the same radar. Mirage has 11 line-ups so far; other maps show an empty state with a link to Mirage.
 
-- Every landing spot is a circle about the size of a smoke. Tap one to see the spots it is thrown from, with an arc for each throw; tap a throw spot (or a name in the list) for its card: where to **stand**, what to **aim** at, the **technique** (which mouse button, standing, walking or running, jump-throw or not, crouching or not) and what it **blocks**. Two screenshots, **Where to stand** and **Where to aim**, open full size on click (`←` `→` switch, `Esc` closes); until someone adds them the card says "Screenshot needed". The view zooms to fit the throw and the landing.
+- **Explore**: every landing spot is a circle about the size of a smoke. Tap one to see the spots it is thrown from, with an arc for each throw; tap a throw spot (or a name in the list) for its card: where to **stand**, what to **aim** at, the **technique** (which mouse button, standing, walking or running, jump-throw or not, crouching or not) and what it **blocks**. Two screenshots, **Where to stand** and **Where to aim**, open full size on click (`←` `→` switch, `Esc` closes); until someone adds them the card says "Screenshot needed". The view zooms to fit the throw and the landing.
 - Filter by side (`T`, `C`, `B` for both; remembered) and by target (A, Mid, B; pick any mix).
 - `[` and `]` step through the list, `Esc` (or a tap on empty radar) goes back one step, `+` `−` `0` zoom.
-- Links open a line-up directly: `#mirage/smokes/ct-from-t-roof`.
-- **Drill** (the Browse | Drill switch at the top) asks "Where do you stand to smoke Window?" with the landing spot lit up. Click your throw spot: within about 2.5 m (100 units) is a **Hit**, within about 5 m is **Close**, and only a Hit counts. The reveal shows the real spot, both rings, your click and where to stand. Then a bonus question, **Which throw?** (keys `1`–`6`: the right technique among common ones such as "Jump · Left" or "Stand · L+R"), which never touches your streak, and the aim, with the screenshots when the line-up has them. `Enter` goes on. Rounds are up to 8 line-ups on the chosen side, new and still-learning ones first.
-- The summary shows your score, how many throws you got right, and every missed line-up on the radar; click one to open it in Browse. A line-up counts as learned after three Hits in a row. Drill progress is saved in its own store (`cct.smokes`), and **Reset Mirage smokes** clears only that, not your callout progress.
+- Links open a line-up directly: `#mirage/smokes/explore/ct-from-t-roof`. Older links such as `#mirage/smokes/ct-from-t-roof` still work.
+- **Find it** asks "Where do you stand to smoke Window?" with the landing spot lit up. Click your throw spot: within about 2.5 m (100 units) is a **Hit**, within about 5 m is **Close**, and only a Hit counts. The reveal shows the real spot, both rings, your click and where to stand. Then a bonus question, **Which throw?** (keys `1`–`6`: the right technique among common ones such as "Jump · Left" or "Stand · L+R"), which never touches your streak, and the aim, with the screenshots when the line-up has them. `Enter` goes on. Rounds are up to 8 line-ups on the chosen side, new and still-learning ones first.
+- The summary shows your score, how many throws you got right, and every missed line-up on the radar; click one to open it in Explore. A line-up counts as learned after three Hits in a row. Find it progress is saved in its own store (`cct.smokes`), and **Reset Mirage smokes** clears only that, not your callout progress.
+- **Name it** for smokes is coming (the tab says "soon"): you'll see where you stand and name the smoke.
 
 **These line-ups are approximate.** They are well-known community smokes, described in our own words and placed by hand from memory of common practice. **We have not tested them in game**, so throw spots, aims and techniques may be off by a step or two. Every card says "Approximate, not checked in game" until someone confirms it.
 
@@ -64,13 +67,13 @@ A line-up without `shots` shows the "Screenshot needed" placeholder and requests
 - **Radar images** are the official CS2 radars, taken from the game files as published by [awpy-data](https://github.com/pnxenopoulos/awpy-data) (release 2000935). They contain no text, so nothing had to be painted out.
 - **Callout names** follow the list at [totalcsgo.com/callouts](https://totalcsgo.com/callouts). The descriptions in this app are written fresh.
 - **Positions** were placed by hand on the radars, so some are approximate. Dust II has had a review pass against several callout guides.
-- **Zones** were generated from the radar by `tools/make_polygons.py` (see below), so their edges are a starting point. Fix them in Edit mode.
+- **Zones** were generated from the radar by `tools/make_polygons.py` (see below), so their edges are a starting point. Fix them with **Edit zones**.
 
 Counter-Strike and its map radars belong to Valve. This project is not affiliated with Valve or Total CS.
 
 ## Fixing a zone
 
-1. Open the map in **Edit**, click the zone, and drag its points (or its name handle) where they belong.
+1. Open the map, click **Edit zones** in the panel footer, click the zone, and drag its points (or its name handle) where they belong.
 2. Click **Copy map data** (or **Download**).
 3. In `data/maps.js`, replace that map's `"callouts": [ ... ]` block with what you copied, and commit.
 
@@ -116,9 +119,9 @@ css/style.css       styles
 js/app.js           the app (no dependencies)
 data/maps.js        maps, callouts, name positions and zones (radar pixel space, 0–1024)
 data/routes.js      spawn-to-spot routes for Live mode (generated by tools/make_routes.py)
-data/smokes.js      smoke line-ups for the Smokes tab (hand-written, approximate)
-js/live.js          Live mode
-js/smokes.js        Smokes mode
+data/smokes.js      smoke line-ups for Smokes (hand-written, approximate)
+js/live.js          the Live tool
+js/smokes.js        Smokes (Explore, Find it and the Name it placeholder)
 tools/              zone generator and the list of area callouts
 img/radars/*.webp   clean CS2 radars
 img/smokes/<map>/   line-up screenshots (<id>-stand.webp, <id>-aim.webp)
