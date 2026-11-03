@@ -44,8 +44,11 @@ The **Live** button is for a second screen during a match. Hit **Start** (or `Sp
 | Ancient | 9 |
 | Anubis | 10 |
 | Cache | 11 |
-
-A map without line-ups shows an empty state with links to the maps that have them.
+| Nuke | 10 |
+| Overpass | 12 |
+| Train | 9 |
+| Vertigo | 11 |
+| **Total** | **105** |
 
 - **Explore**: every landing spot is a circle about the size of a smoke. Tap one to see the spots it is thrown from, with an arc for each throw; tap a throw spot (or a name in the list) for its card: where to **stand**, what to **aim** at, the **technique** (which mouse button, standing, walking or running, jump-throw or not, crouching or not) and what it **blocks**, plus **Precise aim** or **Loose aim** when we know how exact the aim must be. **Video and screenshots on csnades.gg ↗** opens the source in a new tab (in Find it it shows with the aim, after the throw question). Two screenshots of our own, **Where to stand** and **Where to aim**, open full size on click (`←` `→` switch, `Esc` closes); until someone adds them the card says "Screenshot needed", or "Not here yet, see csnades.gg" when the line-up has a source. The view zooms to fit the throw and the landing.
 - Filter by side (`T`, `C`, `B` for both) and by target (A, Mid, B; pick any mix). Both filters are remembered and apply to Find it too.
