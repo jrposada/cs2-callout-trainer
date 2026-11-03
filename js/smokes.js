@@ -315,7 +315,7 @@
     const R = landR();
     A.fitBox([Math.min(l.from.x, l.to.x - R), Math.min(l.from.y, l.to.y - R), Math.max(l.from.x, l.to.x + R), Math.max(l.from.y, l.to.y + R)], 0.15);
   }
-  // how: "list" (a row, [ ] or a landing on the radar), "radar" (a throw spot), "route" (a link)
+  // how: "list" (a row or [ ]), "radar" (a landing or throw spot on the map), "route" (a link)
   function select(id, how) {
     const l = all().find((x) => x.id === id);
     if (!l) return;
@@ -324,13 +324,16 @@
     S.sel = l.id;
     S.focus = l.to.callout;
     render();
-    frame(l);
+    // Map clicks keep the zoom where it is; the list and links frame the line-up.
+    if (how !== "radar") frame(l);
     A.updateHash();
     A.announce(`${l.name}, from ${l.from.name}, ${SIDE_NAME[l.side]} side. Aim: ${l.aim}`);
     const panel = A.panel;
     if (how === "route") { panel.scrollTop = 0; return; }
     const row = panel.querySelector(`.smk-list button[data-id="${CSS.escape(l.id)}"]`);
-    if (how === "list" && row) row.focus({ preventScroll: true });
+    // Keyboard focus follows the selection when it is in the list, so it never sits on a stale row.
+    const inList = document.activeElement && document.activeElement.closest && document.activeElement.closest(".smk-list");
+    if ((how === "list" || inList) && row) row.focus({ preventScroll: true });
     // Narrow screens have no sticky card, so bring the card itself into view.
     const card = A.NARROW.matches && panel.querySelector(".smk-card");
     if (card) card.scrollIntoView({ block: "nearest" });
@@ -376,7 +379,7 @@
     A.announce(`${v === "both" ? "Both sides" : SIDE_NAME[v] + " side"}: ${n} line-up${n === 1 ? "" : "s"}.`);
   }
 
-  // Map clicks: a throw spot of the focused target, then a landing, else one step back.
+  // Map clicks: a throw spot of the focused target, then a landing, else one step back. Both toggle like a list row.
   function click(p) {
     if (view() === "find") { const q = S.round; if (q && !q.done && q.phase === "ask") answer(p); else goLevel((ghostAt(p) || {}).level); return; }
     if (view() !== "explore") return;
@@ -388,7 +391,7 @@
         const d = dist(p, l.from);
         if (d <= HIT_PX * u && d < bd) { best = l; bd = d; }
       }
-      if (best) { if (best.id !== S.sel) select(best.id, "radar"); return; }
+      if (best) { if (best.id === S.sel) back(); else select(best.id, "radar"); return; }
     }
     const R = Math.max(landR(), HIT_PX * u);
     let t = null;
@@ -401,11 +404,11 @@
     // A ghost (line-up end on the other level) wins over a landing here only when it is closer.
     const gl = ghostAt(p);
     if (gl && gl.d < bd) return goLevel(gl.level);
-    // A landing acts like its row in the list: it selects that line-up, and the selected one again steps back.
-    // With several line-ups on one landing, the first is picked and its throw spots choose among the rest.
     if (t) {
-      const l = t.items.find((x) => x.id === S.sel) || t.items[0];
-      if (l.id === S.sel) back(); else select(l.id, "list");
+      // A landing acts like its list row: it opens a line-up (one thrown from this level first), or closes the open one.
+      const cur = list.find((l) => l.id === S.sel);
+      if (cur && cur.to.callout === t.key) back();
+      else select((t.items.find((l) => l.from.level === lv) || t.items[0]).id, "radar");
       return;
     }
     back();
