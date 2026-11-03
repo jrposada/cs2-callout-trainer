@@ -65,7 +65,8 @@
   const NARROW = window.matchMedia ? matchMedia("(max-width: 860px)") : { matches: false };
   const MASTER_STREAK = 3;
   // Extra modes from other scripts (js/live.js, js/smokes.js): window.CCT_MODES[id] = { init, render, leave,
-  // rescale, busy, and optionally click(p), escape() -> handled?, route(arg), hashArg() -> string, zones }.
+  // rescale, busy, and optionally click(p), escape() -> handled?, route(arg), hashArg() -> string, zones,
+  // and grab(p, target) -> true to drag something of its own, then drag(p) and drop(p, moved) }.
   const EXT = window.CCT_MODES || {};
   const ext = () => EXT[state.mode] || null;
   const extLeave = () => { for (const k in EXT) if (EXT[k].leave) EXT[k].leave(); };
@@ -414,7 +415,10 @@
         p0: clientToSvg(e.clientX, e.clientY, ctm),
       };
       const sel = state.mode === "edit" && selectedCallout();
-      if (handle) {
+      if (ext() && ext().grab && ext().grab(gesture.p0, e.target)) {
+        gesture.type = "ext";
+        gesture.moved = false;
+      } else if (handle) {
         const c = sel;
         if (handle.classList.contains("vertex")) {
           gesture.type = "vertex";
@@ -464,6 +468,12 @@
       gesture.type = "pan";
       svg.classList.add("is-panning");
     }
+    if (gesture.type === "ext") {
+      if (!gesture.moved && Math.hypot(e.clientX - gesture.start.x, e.clientY - gesture.start.y) < 3) return;
+      gesture.moved = true;
+      if (ext() && ext().drag) ext().drag(clientToSvg(e.clientX, e.clientY));
+      return;
+    }
     if (gesture.type === "pan") {
       const p = clientToSvg(e.clientX, e.clientY, gesture.ctm);
       const [x, y, w, h] = gesture.view0;
@@ -500,7 +510,9 @@
     if (!pointers.has(e.pointerId)) return;
     pointers.delete(e.pointerId);
     if (!gesture) return;
-    if (gesture.type === "maybe" && pointers.size === 0) {
+    if (gesture.type === "ext") {
+      if (ext() && ext().drop) ext().drop(clientToSvg(e.clientX, e.clientY), gesture.moved);
+    } else if (gesture.type === "maybe" && pointers.size === 0) {
       const p = clientToSvg(e.clientX, e.clientY);
       onMapClick(p);
     } else if (gesture.type === "vertex" || gesture.type === "anchor" || gesture.type === "zone") {

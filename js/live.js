@@ -18,6 +18,8 @@
 
   let A = null;     // app api, from init()
   let layer = null; // <g> on the radar, owned by this mode
+  let ED = null;    // route editor (js/route-edit.js), shown instead of the clock while open
+  const editing = () => !!ED && ED.active();
   const L = {
     running: false,
     acc: 0,          // game seconds elapsed before the last resume
@@ -77,14 +79,34 @@
         if (!legs.length || !Number.isFinite(+r.time)) return null;
         const last = legs[legs.length - 1];
         const c = A.callout(r.to);
+        // Stops are jumps and climbs: fixed seconds at a distance along the route,
+        // not scaled by weapon speed. The rest of the time is running.
+        const stops = (Array.isArray(r.stops) ? r.stops : [])
+          .map(([at, s]) => ({ at: +at, s: +s })).filter((p) => p.s > 0).sort((a, b) => a.at - b.at);
+        const stopS = stops.reduce((a, p) => a + p.s, 0);
+        const run = Math.max(0, +r.time - stopS) * k;
         return {
-          id: r.id, side: r.side === "CT" ? "ct" : "t", sideName: r.side === "CT" ? "CT" : "T", from: +r.from || 0,
-          name: c ? c.name : String(r.to || r.id), time: Math.max(0, +r.time * k),
+          id: r.id, to: r.to, side: r.side === "CT" ? "ct" : "t", sideName: r.side === "CT" ? "CT" : "T", from: +r.from || 0,
+          name: c ? c.name : String(r.to || r.id), time: run + stopS, run, stops,
           legs, len: legs.reduce((a, l) => a + l.len, 0), end: last.pts[last.pts.length - 1], endLevel: last.level,
         };
       })
       .filter(Boolean)
       .sort((a, b) => a.time - b.time || a.name.localeCompare(b.name));
+  }
+  // How far (radar px) a route's dot has travelled after e seconds, waiting out its stops.
+  function dist(rt, e) {
+    if (!rt.run) return e >= rt.time ? rt.len : 0;
+    const v = rt.len / rt.run;
+    let t = e, d = 0;
+    for (const p of rt.stops) {
+      const reach = Math.max(0, p.at - d) / v;
+      if (t <= reach) return d + t * v;
+      t -= reach; d = Math.max(d, p.at);
+      if (t <= p.s) return d;
+      t -= p.s;
+    }
+    return Math.min(rt.len, d + t * v);
   }
   // Where a route's dot is after travelling d radar px: leg index, segment index, point.
   function at(rt, d) {
@@ -109,6 +131,7 @@
 
   // ---------- radar layer ----------
   function draw() {
+    if (editing()) return ED.draw();
     layer.textContent = "";
     L.dom.clear();
     const lv = A.state.level;
@@ -160,8 +183,7 @@
     layer.classList.toggle("is-idle", e === 0);
     let changed = false;
     for (const rt of L.routes) {
-      const f = rt.time ? Math.min(1, e / rt.time) : 1;
-      const pos = at(rt, f * rt.len);
+      const pos = at(rt, dist(rt, e));
       const dom = L.dom.get(rt.id);
       const arrived = e > 0 && e >= rt.time;
       if (dom) {
@@ -202,7 +224,7 @@
     layer.querySelectorAll("[data-r]").forEach((n) => n.setAttribute("r", Number(n.dataset.r) * u));
     layer.querySelectorAll("text").forEach((t) => {
       t.setAttribute("font-size", 13 * u);
-      t.setAttribute("dx", 9 * u);
+      t.setAttribute("dx", (t.dataset.dx != null ? Number(t.dataset.dx) : 9) * u);
       t.setAttribute("dy", Number(t.dataset.dy) * u);
       t.style.strokeWidth = 3.5 * u;
     });
@@ -268,6 +290,19 @@
       b.classList.toggle("is-arrived", L.arrived.has(b.dataset.id));
       b.classList.toggle("is-sel", b.dataset.id === L.sel);
     });
+    const ed = A.panel.querySelector("#liveEdit");
+    if (ed) {
+      const rt = L.routes.find((r) => r.id === L.sel);
+      ed.disabled = !rt;
+      ed.textContent = rt ? `Edit ${rt.sideName} ${rt.name}` : "Edit route";
+    }
+  }
+  function openEditor() {
+    const d = mapData();
+    const r = d && L.sel && d.routes.find((x) => x.id === L.sel);
+    if (!r || !ED) return;
+    if (L.running) { L.acc = elapsed(); stop(); }
+    ED.open(r);
   }
   const seg = (id, items, cur) =>
     `<div class="seg" id="${id}">${items.map(([v, label]) => `<button type="button" data-v="${v}" aria-pressed="${String(v) === String(cur)}">${label}</button>`).join("")}</div>`;
@@ -275,6 +310,7 @@
   function render() {
     const m = A.state.map;
     layer.style.display = "";
+    if (editing()) return ED.render();
     L.routes = prepare();
     // Recount arrivals quietly: a redraw is not a dot arriving.
     const e0 = elapsed();
@@ -301,6 +337,7 @@
       return;
     }
     const multi = m.levels.length > 1;
+    const edited = ED ? ED.editedKeys() : new Set();
     A.panel.innerHTML = `
       <div class="live-top">
         <div class="live-clock${L.running ? " is-running" : ""}" id="liveClock" aria-live="off">${fmt(elapsed())}</div>
@@ -319,13 +356,16 @@
         ${L.routes.map((rt) => `<li><button type="button" data-id="${A.esc(rt.id)}" class="side-${rt.side}">
             <span class="sd">${rt.sideName}</span>
             <span class="nm">${A.esc(rt.name)}</span>
+            ${edited.has(`${rt.sideName}/${rt.to}`) ? `<span class="ed" title="Edited in this browser">edited</span>` : ""}
             ${multi && rt.endLevel === "lower" ? `<span class="lv">lower</span>` : ""}
             <span class="tm">${fmt(rt.time)}</span>
           </button></li>`).join("")}
       </ol>
-      <div class="foot">Hit Start when freeze time ends. Times are for running the whole way with the weapon out, no stops or jumps, so real players are a little slower. ${multi ? "Routes show on the level they run on." : ""}</div>`;
+      ${ED ? `<div class="row live-edit-row"><button type="button" class="btn small" id="liveEdit" disabled>Edit route</button><span class="kbd-hint">Pick a route, then fix its start, waypoints and jumps by hand.</span></div>` : ""}
+      <div class="foot">Hit Start when freeze time ends. Times are for running the whole way with the weapon out, plus the jumps a route needs (the dot waits there), so real players are a little slower. ${multi ? "Routes show on the level they run on." : ""}</div>`;
     A.panel.querySelector("#liveGo").onclick = toggle;
     A.panel.querySelector("#liveReset").onclick = reset;
+    if (ED) A.panel.querySelector("#liveEdit").onclick = openEditor;
     bindSeg("liveSide", (v) => setPref("liveSide", v));
     bindSeg("liveWeapon", (v) => setPref("liveWeapon", v));
     bindSeg("liveRate", (v) => setRate(Number(v)));
@@ -361,7 +401,7 @@
 
   // ---------- keyboard ----------
   document.addEventListener("keydown", (e) => {
-    if (!A || A.state.mode !== "live" || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (!A || A.state.mode !== "live" || editing() || e.ctrlKey || e.metaKey || e.altKey) return;
     const t = e.target;
     if (t && (t.isContentEditable || (t.matches && t.matches("input, textarea, select")))) return;
     if (e.key === " " || e.code === "Space") {
@@ -387,13 +427,27 @@
       layer = A.el("g", { id: "layerLive", class: "live-layer" });
       A.svg.insertBefore(layer, A.$("#layerEdit"));
       layer.style.display = "none";
+      if (window.CCT_ROUTE_EDIT) {
+        ED = window.CCT_ROUTE_EDIT({
+          A, layer, mapData, spawnList, fmt,
+          rescale: () => rescale(A.unit()),
+          onClose: () => render(),
+        });
+      }
     },
+    // Map clicks, drags and Escape belong to the route editor while it is open.
+    click: (p) => { if (editing()) ED.click(p); },
+    grab: (p, target) => editing() && ED.grab(p, target),
+    drag: (p) => { if (editing()) ED.drag(p); },
+    drop: (p, moved) => { if (editing()) ED.drop(p, moved); },
+    escape: () => editing() && ED.escape(),
     render,
     rescale,
     // Leaving the mode or the map stops the clock and clears the radar.
     leave() {
       if (!A) return;
       stop();
+      if (ED) ED.reset();
       L.acc = 0;
       L.sel = null;
       L.arrived.clear();
