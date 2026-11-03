@@ -34,9 +34,11 @@ The **Live** button is for a second screen during a match. Hit **Start** (or `Sp
 
 ## Smoke line-ups
 
-**Smokes** (top row) shows where to stand to throw well-known smokes, and how to throw them, on the same radar. Mirage has 11 line-ups so far; other maps show an empty state with a link to Mirage.
+**Smokes** (top row) shows where to stand to throw well-known smokes, and how to throw them, on the same radar. Line-ups are sourced from [csnades.gg](https://csnades.gg): each card links to the line-up's video and screenshots there. We link to them and don't copy them: no images, no setpos commands, no text.
 
-- **Explore**: every landing spot is a circle about the size of a smoke. Tap one to see the spots it is thrown from, with an arc for each throw; tap a throw spot (or a name in the list) for its card: where to **stand**, what to **aim** at, the **technique** (which mouse button, standing, walking or running, jump-throw or not, crouching or not) and what it **blocks**. Two screenshots, **Where to stand** and **Where to aim**, open full size on click (`←` `→` switch, `Esc` closes); until someone adds them the card says "Screenshot needed". The view zooms to fit the throw and the landing.
+Line-ups per map: TODO (counts to come). A map without line-ups shows an empty state with links to the maps that have them.
+
+- **Explore**: every landing spot is a circle about the size of a smoke. Tap one to see the spots it is thrown from, with an arc for each throw; tap a throw spot (or a name in the list) for its card: where to **stand**, what to **aim** at, the **technique** (which mouse button, standing, walking or running, jump-throw or not, crouching or not) and what it **blocks**, plus **Precise aim** or **Loose aim** when we know how exact the aim must be. **Video and screenshots on csnades.gg ↗** opens the source in a new tab (in Find it it shows with the aim, after the throw question). Two screenshots of our own, **Where to stand** and **Where to aim**, open full size on click (`←` `→` switch, `Esc` closes); until someone adds them the card says "Screenshot needed", or "Not here yet, see csnades.gg" when the line-up has a source. The view zooms to fit the throw and the landing.
 - Filter by side (`T`, `C`, `B` for both) and by target (A, Mid, B; pick any mix). Both filters are remembered and apply to Find it too.
 - `[` and `]` step through the list, `Esc` (or a tap on empty radar) goes back one step, `+` `−` `0` zoom.
 - Links open a line-up directly: `#mirage/smokes/explore/ct-from-t-roof`. Older links such as `#mirage/smokes/ct-from-t-roof` still work.
@@ -44,7 +46,7 @@ The **Live** button is for a second screen during a match. Hit **Start** (or `Sp
 - The summary shows your score, how many throws you got right (and how many you skipped), and every missed line-up on the radar; click one to open it in Explore. A line-up counts as learned after three Hits in a row. Find it progress is saved in its own store (`cct.smokes`), and **Reset Mirage smokes** clears only that, not your callout progress.
 - **Name it** for smokes is coming (the tab says "soon"): you'll see where you stand and name the smoke.
 
-**These line-ups are approximate.** They are well-known community smokes, described in our own words and placed by hand from memory of common practice. **We have not tested them in game**, so throw spots, aims and techniques may be off by a step or two. Every card says "Approximate, not checked in game" until someone confirms it.
+**These line-ups are approximate.** Each one is taken from csnades.gg, then described in our own words and placed by hand on our radar. A source link makes a line-up sourced, not checked: **we have not tested them in game**, so throw spots, aims and techniques may be off by a step or two. Every card says "Approximate, not checked in game" until someone confirms it.
 
 If a line-up is wrong, use **This line-up is wrong?** on its card. It opens a GitHub issue with the line-up already named; say what's off and, if you can, add a clip. A line-up only becomes **Checked** through a pull request to `data/smokes.js` from someone who threw it in game: set `status: "checked"` and `checked: "YYYY-MM"`, and fix the spot or text if needed.
 
@@ -67,9 +69,10 @@ A line-up without `shots` shows the "Screenshot needed" placeholder and requests
 - **Radar images** are the official CS2 radars, taken from the game files as published by [awpy-data](https://github.com/pnxenopoulos/awpy-data) (release 2000935). They contain no text, so nothing had to be painted out.
 - **Callout names** follow the list at [totalcsgo.com/callouts](https://totalcsgo.com/callouts). The descriptions in this app are written fresh.
 - **Positions** were placed by hand on the radars, so some are approximate. Dust II has had a review pass against several callout guides.
+- **Smoke line-ups** are sourced from [csnades.gg](https://csnades.gg). We link to each line-up's page for its video and screenshots and copy nothing; the text and the radar positions are our own.
 - **Zones** were generated from the radar by `tools/make_polygons.py` (see below), so their edges are a starting point. Fix them with **Edit zones**.
 
-Counter-Strike and its map radars belong to Valve. This project is not affiliated with Valve or Total CS.
+Counter-Strike and its map radars belong to Valve. This project is not affiliated with Valve, Total CS or csnades.gg.
 
 ## Fixing a zone
 
