@@ -281,42 +281,99 @@
   }
 
   // ---------- view / pan / zoom ----------
-  function setView(v) {
-    const [, , w] = v;
+  // setView jumps (wheel, pinch, drag, restoring). goView animates (buttons, keys, framing a zone or line-up).
+  function clampView(v) {
     const minW = 70, maxW = 1500;
-    const k = Math.min(Math.max(w, minW), maxW) / w;
+    const k = Math.min(Math.max(v[2], minW), maxW) / v[2];
     const cx = v[0] + v[2] / 2, cy = v[1] + v[3] / 2;
     const nw = v[2] * k, nh = v[3] * k;
-    state.view = [cx - nw / 2, cy - nh / 2, nw, nh];
-    svg.setAttribute("viewBox", state.view.join(" "));
+    return [cx - nw / 2, cy - nh / 2, nw, nh];
+  }
+  function applyView(v) {
+    state.view = v;
+    svg.setAttribute("viewBox", v.join(" "));
     rescaleMarks();
   }
-  function fitView() { setView(state.map.view.slice()); }
+  function setView(v) { stopView(); applyView(clampView(v)); }
+  function fitView() { goView(state.map.view.slice()); }
+  // Where the view is headed: the running animation's end, else the current view. Relative moves build on it.
+  function viewTarget() { return viewAnim ? viewAnim.to : state.view; }
   // svg units per screen px
-  function unit() {
+  function unitOf(v) {
     const r = svg.getBoundingClientRect();
     if (!r.width || !r.height) return 1;
-    return Math.max(state.view[2] / r.width, state.view[3] / r.height);
+    return Math.max(v[2] / r.width, v[3] / r.height);
+  }
+  function unit() { return unitOf(state.view); }
+
+  // Smooth zoom and pan (van Wijk & Nuij 2003, as in d3.interpolateZoom): a long move zooms out, travels
+  // and zooms back in, and a zoom with no pan just scales. It runs on the visible area (centre and width
+  // on screen), since the svg letterboxes the viewBox, then lands on the exact target viewBox.
+  const RHO = Math.SQRT2, REDUCE_MOTION = matchMedia("(prefers-reduced-motion: reduce)");
+  let viewAnim = null;
+  function stopView() { if (viewAnim) { cancelAnimationFrame(viewAnim.raf); viewAnim = null; } }
+  function goView(v) {
+    const to = clampView(v), r = svg.getBoundingClientRect();
+    stopView();
+    if (REDUCE_MOTION.matches || !r.width || !r.height) return applyView(to);
+    const from = state.view;
+    const ux0 = from[0] + from[2] / 2, uy0 = from[1] + from[3] / 2, w0 = unitOf(from) * r.width;
+    const ux1 = to[0] + to[2] / 2, uy1 = to[1] + to[3] / 2, w1 = unitOf(to) * r.width;
+    const dx = ux1 - ux0, dy = uy1 - uy0, d2 = dx * dx + dy * dy, d1 = Math.sqrt(d2);
+    let S, at;
+    if (d1 < 1e-6 * w0) {
+      // Same centre: scale only.
+      S = Math.log(w1 / w0) / RHO;
+      at = (s) => [ux0, uy0, w0 * Math.exp(RHO * s * S)];
+    } else {
+      const R2 = RHO * RHO, R4 = R2 * R2;
+      const b0 = (w1 * w1 - w0 * w0 + R4 * d2) / (2 * w0 * R2 * d1);
+      const b1 = (w1 * w1 - w0 * w0 - R4 * d2) / (2 * w1 * R2 * d1);
+      const r0 = Math.log(Math.sqrt(b0 * b0 + 1) - b0), r1 = Math.log(Math.sqrt(b1 * b1 + 1) - b1);
+      const c0 = Math.cosh(r0), s0 = Math.sinh(r0);
+      S = (r1 - r0) / RHO;
+      at = (s) => {
+        const a = RHO * s * S + r0;
+        const u = (w0 / (R2 * d1)) * (c0 * Math.tanh(a) - s0);
+        return [ux0 + u * dx, uy0 + u * dy, (w0 * c0) / Math.cosh(a)];
+      };
+    }
+    const len = Math.abs(S);
+    if (!isFinite(len) || len < 1e-3) return applyView(to);
+    const ms = Math.min(220 + 260 * len, 800), t0 = performance.now(), aspect = r.height / r.width;
+    const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+    const step = (now) => {
+      const t = Math.min((now - t0) / ms, 1);
+      if (t >= 1) { viewAnim = null; return applyView(to); }
+      const [cx, cy, w] = at(ease(t)), h = w * aspect;
+      applyView([cx - w / 2, cy - h / 2, w, h]);
+      viewAnim.raf = requestAnimationFrame(step);
+    };
+    viewAnim = { to, raf: requestAnimationFrame(step) };
   }
   function zoomAt(factor, cx, cy) {
     const [x, y, w, h] = state.view;
     const nw = w / factor, nh = h / factor;
     setView([cx - (cx - x) * (nw / w), cy - (cy - y) * (nh / h), nw, nh]);
   }
-  function zoomCenter(factor) { const [x, y, w, h] = state.view; zoomAt(factor, x + w / 2, y + h / 2); }
+  // Buttons and keys: animated, and repeated presses stack on where the view is headed.
+  function zoomCenter(factor) {
+    const [x, y, w, h] = viewTarget(), nw = w / factor, nh = h / factor;
+    goView([x + (w - nw) / 2, y + (h - nh) / 2, nw, nh]);
+  }
   function centerOn(p, minZoom) {
-    let [, , w, h] = state.view;
+    let [, , w, h] = viewTarget();
     if (minZoom) {
       const fitW = state.map.view[2];
       if (w > fitW / minZoom) { const k = (fitW / minZoom) / w; w *= k; h *= k; }
     }
-    setView([p.x - w / 2, p.y - h / 2, w, h]);
+    goView([p.x - w / 2, p.y - h / 2, w, h]);
   }
   function ensureVisible(p) {
     // The svg letterboxes the viewBox, so the visible area can be wider or taller than it.
-    const r = svg.getBoundingClientRect(), u = unit();
-    const w = r.width * u || state.view[2], h = r.height * u || state.view[3];
-    const x = state.view[0] + state.view[2] / 2 - w / 2, y = state.view[1] + state.view[3] / 2 - h / 2;
+    const v = viewTarget(), r = svg.getBoundingClientRect(), u = unitOf(v);
+    const w = r.width * u || v[2], h = r.height * u || v[3];
+    const x = v[0] + v[2] / 2 - w / 2, y = v[1] + v[3] / 2 - h / 2;
     const m = Math.min(w, h) * 0.03;
     if (p.x < x + m || p.x > x + w - m || p.y < y + m || p.y > y + h - m) centerOn(p);
   }
@@ -331,6 +388,7 @@
   let gesture = null;
   svg.addEventListener("pointerdown", (e) => {
     if (e.button !== 0 && e.pointerType === "mouse") return;
+    stopView();
     svg.setPointerCapture(e.pointerId);
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.size === 1) {
@@ -615,13 +673,13 @@
   // Name it: zoom in until a small target is about TARGET_PX on screen (but never so far that it overflows).
   const TARGET_PX = 60;
   function showTarget(c) {
-    const pts = ptsOf(c), r = svg.getBoundingClientRect(), u = unit();
+    const pts = ptsOf(c), r = svg.getBoundingClientRect(), u = unitOf(viewTarget());
     const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
     const bw = Math.max(...xs) - Math.min(...xs), bh = Math.max(...ys) - Math.min(...ys);
     const want = r.width && r.height ? Math.max(Math.min(bw, bh) / TARGET_PX, bw / (0.7 * r.width), bh / (0.7 * r.height)) : u;
     if (want >= u) return ensureVisible(zoneCenter(c));
-    const p = zoneCenter(c), k = want / u, [, , w, h] = state.view;
-    setView([p.x - (w * k) / 2, p.y - (h * k) / 2, w * k, h * k]);
+    const p = zoneCenter(c), k = want / u, [, , w, h] = viewTarget();
+    goView([p.x - (w * k) / 2, p.y - (h * k) / 2, w * k, h * k]);
   }
   // Centre of a zone's bounding box, for keeping it in view.
   function zoneCenter(c) {
@@ -654,7 +712,8 @@
     }
     svg.setAttribute("aria-label", `${state.map.name} radar${lv === "lower" ? ", lower level" : ""}`);
     syncLevelButtons();
-    if (refit) fitView();
+    // A new map or level swaps the radar image, so the view jumps rather than flies.
+    if (refit) setView(state.map.view.slice());
   }
   // During an unfinished round the quiz picks the level, so the buttons say they're off.
   function syncLevelButtons() {
@@ -1502,7 +1561,7 @@
   // Fit the view around a radar-px box [x0, y0, x1, y1], padded by a share of its size on each side.
   function fitBox(b, pad = 0.15) {
     const w = Math.max(b[2] - b[0], 1), h = Math.max(b[3] - b[1], 1);
-    setView([b[0] - w * pad, b[1] - h * pad, w * (1 + 2 * pad), h * (1 + 2 * pad)]);
+    goView([b[0] - w * pad, b[1] - h * pad, w * (1 + 2 * pad), h * (1 + 2 * pad)]);
   }
   // What extra modes get to use. setLevel here also redraws, like the level buttons.
   const api = {
