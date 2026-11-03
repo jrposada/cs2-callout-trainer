@@ -77,14 +77,34 @@
         if (!legs.length || !Number.isFinite(+r.time)) return null;
         const last = legs[legs.length - 1];
         const c = A.callout(r.to);
+        // Stops are jumps and climbs: fixed seconds at a distance along the route,
+        // not scaled by weapon speed. The rest of the time is running.
+        const stops = (Array.isArray(r.stops) ? r.stops : [])
+          .map(([at, s]) => ({ at: +at, s: +s })).filter((p) => p.s > 0).sort((a, b) => a.at - b.at);
+        const stopS = stops.reduce((a, p) => a + p.s, 0);
+        const run = Math.max(0, +r.time - stopS) * k;
         return {
           id: r.id, side: r.side === "CT" ? "ct" : "t", sideName: r.side === "CT" ? "CT" : "T", from: +r.from || 0,
-          name: c ? c.name : String(r.to || r.id), time: Math.max(0, +r.time * k),
+          name: c ? c.name : String(r.to || r.id), time: run + stopS, run, stops,
           legs, len: legs.reduce((a, l) => a + l.len, 0), end: last.pts[last.pts.length - 1], endLevel: last.level,
         };
       })
       .filter(Boolean)
       .sort((a, b) => a.time - b.time || a.name.localeCompare(b.name));
+  }
+  // How far (radar px) a route's dot has travelled after e seconds, waiting out its stops.
+  function dist(rt, e) {
+    if (!rt.run) return e >= rt.time ? rt.len : 0;
+    const v = rt.len / rt.run;
+    let t = e, d = 0;
+    for (const p of rt.stops) {
+      const reach = Math.max(0, p.at - d) / v;
+      if (t <= reach) return d + t * v;
+      t -= reach; d = Math.max(d, p.at);
+      if (t <= p.s) return d;
+      t -= p.s;
+    }
+    return Math.min(rt.len, d + t * v);
   }
   // Where a route's dot is after travelling d radar px: leg index, segment index, point.
   function at(rt, d) {
@@ -160,8 +180,7 @@
     layer.classList.toggle("is-idle", e === 0);
     let changed = false;
     for (const rt of L.routes) {
-      const f = rt.time ? Math.min(1, e / rt.time) : 1;
-      const pos = at(rt, f * rt.len);
+      const pos = at(rt, dist(rt, e));
       const dom = L.dom.get(rt.id);
       const arrived = e > 0 && e >= rt.time;
       if (dom) {
@@ -323,7 +342,7 @@
             <span class="tm">${fmt(rt.time)}</span>
           </button></li>`).join("")}
       </ol>
-      <div class="foot">Hit Start when freeze time ends. Times are for running the whole way with the weapon out, no stops or jumps, so real players are a little slower. ${multi ? "Routes show on the level they run on." : ""}</div>`;
+      <div class="foot">Hit Start when freeze time ends. Times are for running the whole way with the weapon out, plus the jumps a route needs (the dot waits there), so real players are a little slower. ${multi ? "Routes show on the level they run on." : ""}</div>`;
     A.panel.querySelector("#liveGo").onclick = toggle;
     A.panel.querySelector("#liveReset").onclick = reset;
     bindSeg("liveSide", (v) => setPref("liveSide", v));

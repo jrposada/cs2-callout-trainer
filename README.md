@@ -108,10 +108,16 @@ python3 tools/make_polygons.py --map dust2 --force   # rebuild one map from scra
 
 `tools/make_routes.py` builds `data/routes.js`, the fastest run to each common early-round spot. Spawns and targets are listed in `tools/routes.json`. Each side lists every competitive spawn (five on most maps, more on some, of which CS2 picks five each round); each spot is routed from all of them and only the fastest run is kept. `tools/fetch_spawns.py` refreshes those spawns from setpos.gg. Paths are shortest paths on the radar floor (kept a little off the walls), and times assume knife speed (250 units/s). Where the radar is wrong, `routes.json` can force "via" points or patch the floor.
 
+The radar has no heights, so obstacles are marked by hand in `routes.json` under `mask.<level>`:
+
+- `"solid_grey": true` treats the light-grey boxes, railings and wall bars as solid. This is only for radars where grey isn't floor; it's on for Dust II.
+- `"ledges"` are height steps, drawn as `{"line": [[x, y], ...], "up": 0.8, "down": 0}`. The low side is on the right as you walk the line from its first point to its last (y grows downwards). Dropping down costs `down` seconds (default 0). Climbing up costs `up` seconds, and a ledge without `up` can't be climbed at all. Jump time is added to the route time and saved as `stops`, so the Live dot waits there. For example, Dust II's Short is a ledge above CT Spawn that can only be climbed at the boxes.
+
 ```sh
 python3 tools/fetch_spawns.py                   # refresh spawn points in routes.json (needs network)
 python3 tools/make_routes.py                    # all maps
 python3 tools/make_routes.py --map mirage --png /tmp   # one map, plus an overlay image to check it
+python3 tools/make_routes.py --map dust2 --png /tmp --mask   # also tint the floor; ledges show red (drop) / magenta (climbable)
 ```
 
 ## Run locally
