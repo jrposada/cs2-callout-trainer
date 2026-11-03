@@ -18,6 +18,10 @@
   const CLICKS = { left: "Left click", right: "Right click", both: "Left+Right click" };
   const CLICK_SHORT = { left: "Left", right: "Right", both: "L+R" };
   const MOVES = { stand: "Standing", walk: "Walking", run: "Running" };
+  const PRECISION = { precise: "Precise aim", loose: "Loose aim" };
+  // Where a line-up comes from (`source` in data/smokes.js): only csnades.gg, https://csnades.gg/<map>/smokes/<slug>.
+  const SOURCE_NAME = "csnades.gg";
+  const SOURCE_PATH = /^\/([a-z0-9]+)\/smokes\/([a-z0-9]+(?:-[a-z0-9]+)*)\/?$/;
   // One short name for compact places (list rows, the drill), e.g. "Jump · Left", "Run-jump · Left".
   function techLabel(t) {
     const how = t.jump
@@ -108,6 +112,17 @@
       if (typeof sh !== "object") return "shots must be an object";
       for (const k of ["stand", "aim"]) if (sh[k] != null && sh[k] !== true && (typeof sh[k] !== "string" || !sh[k])) return `shots.${k} must be true or a path`;
       if (sh.aimAt != null && !(Array.isArray(sh.aimAt) && sh.aimAt.length === 2 && sh.aimAt.every((v) => Number.isFinite(v) && v >= 0 && v <= 1))) return "shots.aimAt must be [x, y] between 0 and 1";
+    }
+    if (r.precision != null && !PRECISION[r.precision]) return `precision "${r.precision}"`;
+    const src = r.source;
+    if (src != null) {
+      if (typeof src !== "object") return "source must be an object";
+      if (src.name !== SOURCE_NAME) return `source.name must be "${SOURCE_NAME}"`;
+      let u = null;
+      try { u = new URL(src.url); } catch { /* reported below */ }
+      const m = u && u.protocol === "https:" && u.hostname === SOURCE_NAME && !u.port && !u.username && !u.search && !u.hash && SOURCE_PATH.exec(u.pathname);
+      if (!m) return `source.url "${src.url}" must be https://${SOURCE_NAME}/<map>/smokes/<slug>`;
+      if (m[1] !== A.state.map.id) return `source.url is for map "${m[1]}", not ${A.state.map.id}`;
     }
     if (r.status !== "unverified" && r.status !== "checked") return `status "${r.status}"`;
     if (r.status === "checked" && !/^\d{4}-\d{2}$/.test(r.checked || "")) return "checked needs a YYYY-MM date";
@@ -360,8 +375,11 @@
     return `<span class="tech tech-click">${mouseSvg(t.click)}${CLICKS[t.click]}</span>`
       + `<span class="tech${t.move !== "stand" ? " is-move" : ""}">${MOVES[t.move]}</span>`
       + (t.jump ? `<span class="tech is-move">Jump-throw</span>` : "")
-      + (t.crouch ? `<span class="tech">Crouch</span>` : "");
+      + (t.crouch ? `<span class="tech">Crouch</span>` : "")
+      + (l.precision ? `<span class="tech tech-prec ${l.precision}">${PRECISION[l.precision]}</span>` : "");
   }
+  // The outbound link to the source's video and screenshots, or "" for a line-up without one.
+  const sourceLink = (l) => (l.source ? `<a class="smk-src" href="${esc(l.source.url)}" target="_blank" rel="noopener">Video and screenshots on ${SOURCE_NAME} ↗</a>` : "");
 
   // ---------- screenshots ----------
   const missingShots = new Set(); // URLs that failed to load, so a redraw goes straight to the placeholder
@@ -372,7 +390,7 @@
     return `<figure class="smk-shot ${cls}${ok ? "" : " is-missing"}" data-kind="${kind}">
         <div class="smk-frame">
           ${ok ? `<button type="button" class="smk-thumb" data-shot="${kind}" aria-label="${SHOT_LABEL[kind]}: open the screenshot"><img src="${esc(url)}" alt="" loading="lazy" decoding="async">${ring}</button>` : ""}
-          <div class="smk-missing"><span>Screenshot needed</span><a href="${HOWTO_URL}" target="_blank" rel="noopener">How to add</a></div>
+          <div class="smk-missing"><span>${l.source ? `Not here yet, see ${SOURCE_NAME}` : "Screenshot needed"}</span><a href="${HOWTO_URL}" target="_blank" rel="noopener">${l.source ? "Add yours" : "How to add"}</a></div>
         </div>
         <figcaption>${SHOT_LABEL[kind]}</figcaption>
       </figure>`;
@@ -481,7 +499,7 @@
         <div class="smk-row"><dt class="smk-k">Lands</dt><dd>${esc(l.lands)}</dd></div>
       </dl>
       <div class="smk-shots">${shotFig(l, "stand")}${shotFig(l, "aim")}</div>
-      <div class="meta smk-meta">${accBadge(l)}<a class="smk-wrong" href="${esc(issueUrl(l))}" target="_blank" rel="noopener">This line-up is wrong?</a></div>
+      <div class="meta smk-meta">${accBadge(l)}${sourceLink(l)}<a class="smk-wrong" href="${esc(issueUrl(l))}" target="_blank" rel="noopener">This line-up is wrong?</a></div>
       <div class="meta"><span class="mode-st">${masteryText(l.id)}</span></div>
     </div>`;
   }
@@ -572,7 +590,7 @@
         ${groups.map(([s, ls]) => `<h4 class="smk-group">${SITE_HEAD[s]}</h4><ul class="smk-list">${ls.map(row).join("")}</ul>`).join("")}
       </div>
       <span class="kbd-hint"><kbd>[</kbd> <kbd>]</kbd> previous / next, <kbd>T</kbd> <kbd>C</kbd> <kbd>B</kbd> side, <kbd>Esc</kbd> back</span>
-      <div class="foot">These line-ups are well-known community smokes, written up in our own words and placed by hand. They are approximate and not yet checked in game. Callout names follow <a href="https://totalcsgo.com/callouts" target="_blank" rel="noopener">Total CS</a>.</div>`;
+      <div class="foot">Line-ups are sourced from <a href="https://csnades.gg" target="_blank" rel="noopener">csnades.gg</a>, which hosts their videos and screenshots. We link to them, write each one up in our own words and place it by hand. They are approximate and not yet checked in game. Callout names follow <a href="https://totalcsgo.com/callouts" target="_blank" rel="noopener">Total CS</a>.</div>`;
     // On narrow screens the panel sits below the map, so echo the selection on the stage.
     A.$("#stagePrompt").innerHTML = sel ? `${esc(sel.name)}<span class="sp-desc">Aim: ${esc(sel.aim)}</span>` : "";
     bindSeg("smkSide", setSide);
@@ -743,7 +761,7 @@
           <p class="desc"><strong>Stand:</strong> ${esc(l.from.name)}. ${esc(l.stand)}</p></div>${standShot}</div>
         <p class="ask smk-ask">Which throw? <span class="tag-bonus">not scored in streak</span></p>
         ${choices}
-        ${picked ? `<div class="smk-aimblock${aimShot ? " has-shot" : ""}">${aimShot}<div class="smk-aimtext"><span class="smk-k">Aim</span><p class="smk-aim">${esc(l.aim)}</p><p class="smk-tech-note">${techChips(l)}</p></div></div>` : ""}`
+        ${picked ? `<div class="smk-aimblock${aimShot ? " has-shot" : ""}">${aimShot}<div class="smk-aimtext"><span class="smk-k">Aim</span><p class="smk-aim">${esc(l.aim)}</p><p class="smk-tech-note">${techChips(l)}</p>${l.source ? `<p class="smk-src-note">${sourceLink(l)}</p>` : ""}</div></div>` : ""}`
       : `<p class="kbd-hint smk-hint">${A.TOUCH ? "Tap your throw spot. Drag to pan, pinch to zoom." : "Click your throw spot. Drag to pan, scroll to zoom."}</p>`}
       <div class="step-actions">
         ${picked ? `<div class="row"><button type="button" class="btn primary" id="smkNext">${q.i + 1 < q.items.length ? "Next" : "See results"}</button>${A.TOUCH ? "" : `<span class="kbd-hint"><kbd>Enter</kbd></span>`}</div>`

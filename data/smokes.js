@@ -1,20 +1,26 @@
 // Smoke line-ups for the Smokes tab (js/smokes.js). Coordinates are radar px (0-1024), like data/maps.js.
 //
-// These are well-known community smokes, described in our own words and placed by hand from memory of
-// common practice. None has been tested in game by us yet, so every one ships as status "unverified" and
-// the app labels it "Approximate". Only set status "checked" (with checked: "YYYY-MM") after throwing the
-// line-up in game and seeing it land.
+// Line-ups are sourced from csnades.gg, which hosts the video and screenshots for each one. We link to it
+// and copy nothing from it: no images, no setpos, no text. Stand, aim and lands are written in our own
+// words, and both positions are placed by hand on our radar.
+// A source link makes a line-up sourced, not checked: it stays status "unverified" (the app labels it
+// "Approximate") until someone throws it in game. Only then set status "checked" (with checked: "YYYY-MM").
 //
 // Fields:
-//   id      unique per map, used in links (#mirage/smokes/<id>)
+//   id      unique per map, used in links (#mirage/smokes/explore/<id>); renaming one breaks old links
 //   side    "t" | "ct"           site  "a" | "mid" | "b"
-//   to      where it lands: callout id from data/maps.js (+ x, y, level; x, y default to the callout's)
-//   from    where you throw it from: callout id + the exact spot (inside that callout's zone) + level
+//   to      where it lands: callout id from data/maps.js (+ x, y, level; x, y default to the callout's).
+//           level may differ from the callout's when the smoke sits at a stair top (Nuke Secret).
+//   from    where you throw it from: callout id + the exact spot (inside that callout's zone) + level.
+//           tools/check_smokes.mjs checks both spots against the zones.
 //   stand   how to find the spot     aim   what to put the crosshair on     lands  what it blocks
 //   technique  how to throw it, one value per facet:
 //              click "left" | "right" | "both" (left and right together)
 //              move  "stand" | "walk" | "run"     jump  true | false     crouch  true | false
-//   status  "unverified" | "checked" (checked also needs checked: "YYYY-MM")
+//   precision  optional, how exact the aim has to be: "precise" | "loose"
+//   source  optional for now: { name: "csnades.gg", url: "https://csnades.gg/<map>/smokes/<slug>" }
+//           <map> is the map id here (they match the csnades slugs); the card links to it for the video
+//   status "unverified" | "checked" (checked also needs checked: "YYYY-MM")
 //   shots   optional screenshots, taken in game by a contributor (see README, "Adding line-up screenshots"):
 //           { stand: true | "path", aim: true | "path", aimAt: [x, y] }
 //           true means the usual file, img/smokes/<map>/<id>-stand.webp or -aim.webp. aimAt is where the
@@ -24,112 +30,146 @@ window.CALLOUT_SMOKES = {
   mirage: [
     {
       id: "window-from-t-spawn", side: "t", site: "mid", name: "Window",
-      to: { callout: "sniper-s-nest", x: 450, y: 444, level: "upper" },
-      from: { callout: "t-spawn", x: 905, y: 400, level: "upper" },
-      stand: "Near the top of T Spawn, backed into the corner by the wall, before you walk down towards mid.",
-      aim: "The tip of the antenna on the roof ahead, just left of where it meets the sky.",
-      technique: { click: "left", move: "stand", jump: true, crouch: false },
-      lands: "In the window, so the CT sniper there can't see top mid.",
+      to: { callout: "sniper-s-nest", x: 452, y: 446, level: "upper" },
+      from: { callout: "t-spawn", x: 896, y: 398, level: "upper" },
+      stand: "In T Spawn, before the path heads down to Mid.",
+      aim: "Exact crosshair spot: see the csnades.gg screenshot.",
+      technique: { click: "left", move: "walk", jump: true, crouch: true },
+      precision: "precise",
+      lands: "In Sniper's Nest, so the CT there can't watch Top Mid.",
+      source: { name: "csnades.gg", url: "https://csnades.gg/mirage/smokes/mid-window-from-t-spawn-a" },
       status: "unverified",
     },
     {
-      id: "connector-from-top-mid", side: "t", site: "mid", name: "Connector",
-      to: { callout: "connector", x: 515, y: 564, level: "upper" },
-      from: { callout: "top-mid", x: 720, y: 505, level: "upper" },
-      stand: "At the bottom of top mid, against the left-hand wall where it meets the corner.",
-      aim: "The top-left corner of the building across mid, along the roof edge.",
-      technique: { click: "left", move: "stand", jump: false, crouch: false },
-      lands: "In the mouth of Connector, cutting the CT view from there into mid.",
+      id: "connector-from-apps-ramp", side: "t", site: "mid", name: "Connector",
+      to: { callout: "connector", x: 515, y: 546, level: "upper" },
+      from: { callout: "apps-ramp", x: 860, y: 244, level: "upper" },
+      stand: "On Apps Ramp, on the T Spawn side.",
+      aim: "Exact crosshair spot: see the csnades.gg screenshot.",
+      technique: { click: "left", move: "stand", jump: true, crouch: false },
+      precision: "precise",
+      lands: "In the Mid end of Connector, so CTs there can't see Mid.",
+      source: { name: "csnades.gg", url: "https://csnades.gg/mirage/smokes/bottom-connector-from-apts-ramp" },
       status: "unverified",
     },
     {
       id: "catwalk-from-top-mid", side: "t", site: "mid", name: "Catwalk",
-      to: { callout: "catwalk", x: 461, y: 367, level: "upper" },
+      to: { callout: "catwalk", x: 470, y: 380, level: "upper" },
       from: { callout: "top-mid", x: 705, y: 440, level: "upper" },
-      stand: "At top mid, tucked against the wall on the right, just past the boxes.",
-      aim: "The right-hand edge of the tall building on the far side of mid, about a third of the way down from the top.",
+      stand: "At Top Mid, on the right by Mid Boxes.",
+      aim: "Exact crosshair spot: see the csnades.gg screenshot.",
       technique: { click: "left", move: "stand", jump: false, crouch: false },
-      lands: "On Catwalk (B Short), so CTs there can't watch you cross mid.",
-      status: "unverified",
-    },
-    {
-      id: "ct-from-t-roof", side: "t", site: "a", name: "CT",
-      to: { callout: "ct", x: 495, y: 828, level: "upper" },
-      from: { callout: "t-roof", x: 775, y: 660, level: "upper" },
-      stand: "On the T side of the A ramp area, in the corner where the wall turns.",
-      aim: "The top edge of the tower above the site, just right of its corner.",
-      technique: { click: "left", move: "stand", jump: true, crouch: false },
-      lands: "In the CT entrance to A, so rotators from CT can't see the site.",
+      precision: "loose",
+      lands: "On Catwalk, so CTs on B Short can't watch Mid.",
+      source: { name: "csnades.gg", url: "https://csnades.gg/mirage/smokes/catwalk-from-top-mid" },
       status: "unverified",
     },
     {
       id: "jungle-from-t-roof", side: "t", site: "a", name: "Jungle",
-      to: { callout: "jungle", x: 505, y: 628, level: "upper" },
-      from: { callout: "t-roof", x: 790, y: 610, level: "upper" },
-      stand: "Against the wall on the T side of the A ramp area, a step back from the corner.",
-      aim: "The top-left corner of the roof ahead, where it meets the sky.",
-      technique: { click: "left", move: "stand", jump: true, crouch: false },
-      lands: "In Jungle, so the CT there can't see the site or ramp.",
+      to: { callout: "jungle", x: 500, y: 604, level: "upper" },
+      from: { callout: "t-roof", x: 768, y: 650, level: "upper" },
+      stand: "On T Roof, against the wall above A Ramp.",
+      aim: "Exact crosshair spot: see the csnades.gg screenshot.",
+      technique: { click: "left", move: "stand", jump: false, crouch: false },
+      precision: "precise",
+      lands: "Where Jungle meets Connector, so CTs there can't see A Ramp or the site.",
+      source: { name: "csnades.gg", url: "https://csnades.gg/mirage/smokes/jungle-and-connector-from-t-roof-a" },
       status: "unverified",
     },
     {
       id: "stairs-from-t-roof", side: "t", site: "a", name: "Stairs",
-      to: { callout: "stairs", x: 528, y: 645, level: "upper" },
-      from: { callout: "t-roof", x: 780, y: 580, level: "upper" },
-      stand: "At the far end of the T side of the A ramp area, against the back wall.",
-      aim: "A dark notch on the roof line ahead, slightly right of the middle.",
+      to: { callout: "stairs", x: 530, y: 648, level: "upper" },
+      from: { callout: "t-roof", x: 770, y: 600, level: "upper" },
+      stand: "On T Roof, further back along the wall.",
+      aim: "Exact crosshair spot: see the csnades.gg screenshot.",
+      technique: { click: "both", move: "stand", jump: true, crouch: false },
+      precision: "precise",
+      lands: "On Stairs, so the CT there can't see Tetris or A Ramp.",
+      source: { name: "csnades.gg", url: "https://csnades.gg/mirage/smokes/stairs-from-t-roof" },
+      status: "unverified",
+    },
+    {
+      id: "ticket-booth-from-a-ramp", side: "t", site: "a", name: "Ticket Booth",
+      to: { callout: "ticket-booth", x: 440, y: 808, level: "upper" },
+      from: { callout: "a-ramp", x: 678, y: 650, level: "upper" },
+      stand: "At the T end of A Ramp, before the arch.",
+      aim: "Exact crosshair spot: see the csnades.gg screenshot.",
+      technique: { click: "left", move: "stand", jump: true, crouch: false },
+      precision: "precise",
+      lands: "On Ticket Booth, cutting the view from there and from CT onto the site.",
+      source: { name: "csnades.gg", url: "https://csnades.gg/mirage/smokes/top-of-ticket-booth-from-a-ramp" },
+      status: "unverified",
+    },
+    {
+      id: "market-window-from-back-alley", side: "t", site: "b", name: "Market Window",
+      to: { callout: "window-market", x: 250, y: 418, level: "upper" },
+      from: { callout: "back-alley", x: 565, y: 176, level: "upper" },
+      stand: "In Back Alley, toward the Apartments end.",
+      aim: "Exact crosshair spot: see the csnades.gg screenshot.",
+      technique: { click: "left", move: "stand", jump: true, crouch: false },
+      precision: "precise",
+      lands: "In the Market window, so CTs in Market can't watch B.",
+      source: { name: "csnades.gg", url: "https://csnades.gg/mirage/smokes/market-window-from-back-alley" },
+      status: "unverified",
+    },
+    {
+      id: "market-door-from-back-alley", side: "t", site: "b", name: "Market Door",
+      to: { callout: "door", x: 318, y: 384, level: "upper" },
+      from: { callout: "back-alley", x: 578, y: 180, level: "upper" },
+      stand: "In Back Alley, toward the Apartments end.",
+      aim: "Exact crosshair spot: see the csnades.gg screenshot.",
+      technique: { click: "left", move: "stand", jump: true, crouch: false },
+      precision: "precise",
+      lands: "On the Market door, so CTs can't come out or watch B from it.",
+      source: { name: "csnades.gg", url: "https://csnades.gg/mirage/smokes/market-door-from-back-alley" },
+      status: "unverified",
+    },
+    {
+      id: "arches-from-back-alley", side: "t", site: "b", name: "Arches",
+      to: { callout: "arches", x: 338, y: 300, level: "upper" },
+      from: { callout: "back-alley", x: 600, y: 175, level: "upper" },
+      stand: "In Back Alley.",
+      aim: "Exact crosshair spot: see the csnades.gg screenshot.",
       technique: { click: "left", move: "stand", jump: false, crouch: false },
-      lands: "On Stairs, cutting the view from there to the site.",
+      precision: "precise",
+      lands: "In Arches, so CTs coming from B Short can't see the site.",
+      source: { name: "csnades.gg", url: "https://csnades.gg/mirage/smokes/right-arch-from-back-alley" },
       status: "unverified",
     },
     {
-      id: "market-window-from-apps", side: "t", site: "b", name: "Market Window",
-      to: { callout: "window-market", x: 249, y: 419, level: "upper" },
-      from: { callout: "b-apartments", x: 395, y: 185, level: "upper" },
-      stand: "In B Apartments, against the far wall near the window that looks out over the site.",
-      aim: "The top edge of the window frame in front of you, near its left corner.",
-      technique: { click: "left", move: "stand", jump: false, crouch: false },
-      lands: "In the Market window, so CTs inside Market can't watch B.",
+      id: "palace-from-ct-spawn", side: "ct", site: "a", name: "Palace",
+      to: { callout: "palace", x: 712, y: 752, level: "upper" },
+      from: { callout: "ct-spawn", x: 342, y: 712, level: "upper" },
+      stand: "In CT Spawn, near the way out to A.",
+      aim: "Exact crosshair spot: see the csnades.gg screenshot.",
+      technique: { click: "left", move: "stand", jump: true, crouch: false },
+      precision: "precise",
+      lands: "At the Palace exit onto A, so Ts can't push out of Palace.",
+      source: { name: "csnades.gg", url: "https://csnades.gg/mirage/smokes/palace-from-ct-spawn" },
       status: "unverified",
     },
     {
-      id: "market-door-from-apps", side: "t", site: "b", name: "Market Door",
-      to: { callout: "door", x: 317, y: 383, level: "upper" },
-      from: { callout: "b-apartments", x: 360, y: 200, level: "upper" },
-      stand: "In B Apartments, just inside the room before the exit, against the left wall.",
-      aim: "The right-hand corner of the archway ahead, where the light starts.",
-      technique: { click: "both", move: "stand", jump: false, crouch: false },
-      lands: "On the Market door, so CTs can't come through or watch from it.",
+      id: "a-ramp-from-ct-spawn", side: "ct", site: "a", name: "A Ramp",
+      to: { callout: "a-ramp", x: 622, y: 660, level: "upper" },
+      from: { callout: "ct-spawn", x: 338, y: 730, level: "upper" },
+      stand: "In CT Spawn, near the way out to A.",
+      aim: "Exact crosshair spot: see the csnades.gg screenshot.",
+      technique: { click: "left", move: "stand", jump: true, crouch: false },
+      precision: "precise",
+      lands: "On A Ramp, so Ts coming down can't see the site.",
+      source: { name: "csnades.gg", url: "https://csnades.gg/mirage/smokes/a-ramp-from-ct-spawn" },
       status: "unverified",
     },
     {
-      id: "top-mid-from-connector", side: "ct", site: "mid", name: "Top Mid",
-      to: { callout: "top-mid", x: 698, y: 461, level: "upper" },
-      from: { callout: "connector", x: 500, y: 575, level: "upper" },
-      stand: "In Connector, close to the mid end, against the wall on the right.",
-      aim: "The top of the far wall at the end of mid, slightly left of centre.",
-      technique: { click: "left", move: "stand", jump: false, crouch: false },
-      lands: "At top mid, so Ts can't take mid control for free.",
-      status: "unverified",
-    },
-    {
-      id: "a-ramp-from-jungle", side: "ct", site: "a", name: "A Ramp",
-      to: { callout: "a-ramp", x: 649, y: 656, level: "upper" },
-      from: { callout: "jungle", x: 480, y: 640, level: "upper" },
-      stand: "In Jungle, with your back to the wall on the CT side.",
-      aim: "The top edge of the building past the site, right above the ramp.",
-      technique: { click: "both", move: "stand", jump: false, crouch: false },
-      lands: "On the top of A Ramp, so Ts there can't see onto the site.",
-      status: "unverified",
-    },
-    {
-      id: "apps-exit-from-market", side: "ct", site: "b", name: "B Apartments exit",
-      to: { callout: "b-plat", x: 284, y: 228, level: "upper" },
-      from: { callout: "market", x: 270, y: 450, level: "upper" },
-      stand: "In Market, near the door out to B, against the wall on the right.",
-      aim: "The top edge of the balcony opposite, near its right end.",
-      technique: { click: "left", move: "stand", jump: false, crouch: false },
-      lands: "Where Apartments come out onto B, so Ts there can't see the site.",
+      id: "apps-exit-from-market", side: "ct", site: "b", name: "B Plat",
+      to: { callout: "b-plat", x: 285, y: 218, level: "upper" },
+      from: { callout: "market", x: 275, y: 440, level: "upper" },
+      stand: "In Market, near the door out to B.",
+      aim: "Exact crosshair spot: see the csnades.gg screenshot.",
+      technique: { click: "left", move: "run", jump: true, crouch: false },
+      precision: "precise",
+      lands: "On B Plat, so Ts coming out of Apartments can't see the site.",
+      source: { name: "csnades.gg", url: "https://csnades.gg/mirage/smokes/apts-from-market" },
       status: "unverified",
     },
   ],
