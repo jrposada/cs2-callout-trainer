@@ -34,6 +34,8 @@
   background: transparent; text-align: left;
 }
 .smk-list button:hover, .smk-list button.is-active { background: var(--raised); }
+/* The selected line-up, however it was picked (row, map or link): a gold bar like its arc on the map. */
+.smk-list button.is-active { box-shadow: inset 3px 0 0 var(--t-gold); }
 .smk-list .sd { flex: none; width: 22px; font: 700 13px/1 var(--display); color: var(--t-gold); }
 .smk-list .side-ct .sd { color: var(--ct-dot); }
 .smk-list .nm { flex: none; font: 600 17px/1.2 var(--display); }

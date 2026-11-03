@@ -339,7 +339,9 @@
     const panel = A.panel;
     if (how === "route") { panel.scrollTop = 0; return; }
     const row = panel.querySelector(`.smk-list button[data-id="${CSS.escape(l.id)}"]`);
-    if (how === "list" && row) row.focus({ preventScroll: true });
+    // Keyboard focus follows the selection when it is in the list, so it never sits on a stale row.
+    const inList = document.activeElement && document.activeElement.closest && document.activeElement.closest(".smk-list");
+    if ((how === "list" || inList) && row) row.focus({ preventScroll: true });
     // Narrow screens have no sticky card, so bring the card itself into view.
     const card = A.NARROW.matches && panel.querySelector(".smk-card");
     if (card) card.scrollIntoView({ block: "nearest" });
