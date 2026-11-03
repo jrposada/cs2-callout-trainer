@@ -39,6 +39,11 @@ The **Live** button is for a second screen during a match. Hit **Start** (or `Sp
 | Map | Line-ups |
 |---|---|
 | Mirage | 12 |
+| Dust II | 11 |
+| Inferno | 10 |
+| Ancient | 9 |
+| Anubis | 10 |
+| Cache | 11 |
 
 A map without line-ups shows an empty state with links to the maps that have them.
 
