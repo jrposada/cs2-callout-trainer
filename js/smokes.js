@@ -315,15 +315,7 @@
     const R = landR();
     A.fitBox([Math.min(l.from.x, l.to.x - R), Math.min(l.from.y, l.to.y - R), Math.max(l.from.x, l.to.x + R), Math.max(l.from.y, l.to.y + R)], 0.15);
   }
-  function setFocus(key) {
-    const t = targets(filtered()).get(key);
-    S.focus = t ? key : null;
-    S.sel = null;
-    render();
-    A.updateHash();
-    if (t) A.announce(`${t.name}: ${t.items.length} line-up${t.items.length === 1 ? "" : "s"}. Pick a throw spot.`);
-  }
-  // how: "list" (a row or [ ]), "radar" (a throw spot), "route" (a link)
+  // how: "list" (a row, [ ] or a landing on the radar), "radar" (a throw spot), "route" (a link)
   function select(id, how) {
     const l = all().find((x) => x.id === id);
     if (!l) return;
@@ -409,7 +401,13 @@
     // A ghost (line-up end on the other level) wins over a landing here only when it is closer.
     const gl = ghostAt(p);
     if (gl && gl.d < bd) return goLevel(gl.level);
-    if (t) { if (t.key !== S.focus || S.sel) setFocus(t.key); return; }
+    // A landing acts like its row in the list: it selects that line-up, and the selected one again steps back.
+    // With several line-ups on one landing, the first is picked and its throw spots choose among the rest.
+    if (t) {
+      const l = t.items.find((x) => x.id === S.sel) || t.items[0];
+      if (l.id === S.sel) back(); else select(l.id, "list");
+      return;
+    }
     back();
   }
 
