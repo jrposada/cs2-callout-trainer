@@ -1,5 +1,5 @@
 {
-  "_about": "Spawns and early-round targets for tools/make_routes.py. Spawns are every competitive spawn point per side as [x, y] radar px (a third value gives the level), filled in by tools/fetch_spawns.py; each target keeps only the fastest run from any of them. Targets are callout ids from data/maps.js; a target can be {\"to\": id, \"via\": [[x, y], [x, y, \"lower\"]]} to force waypoints (a third value switches level there). \"mask\": {level: {\"open\": [[x0, y0, x1, y1]], \"block\": [...]}} patches the walkable floor taken from the radar; a level can also set \"solid_grey\": true and \"ledges\": [{\"line\": [[x, y], ...], \"up\": seconds, \"down\": seconds}] (low side on the right of the line; no \"up\" = drop only). See tools/make_routes.py.",
+  "_about": "Spawns and early-round targets for tools/make_routes.py. Spawns are every competitive spawn point per side as [x, y] radar px (a third value gives the level), filled in by tools/fetch_spawns.py; each target keeps only the fastest run from any of them. Targets are callout ids from data/maps.js; a target can be {\"to\": id, \"via\": [[x, y], [x, y, \"lower\"]]} to force waypoints (a third value switches level there). \"mask\": {level: {\"open\": [[x0, y0, x1, y1]], \"block\": [...]}} patches the walkable floor taken from the radar; a level can also set \"solid_grey\": true and \"ledges\": [{\"line\": [[x, y], ...], \"up\": seconds, \"down\": seconds}] (low side on the right of the line; no \"up\" = drop only). Per target, \"from\": spawn index (or list) pins the start, and a \"via\" entry can be {\"jump\": [[x, y], ...], \"s\": seconds} to go straight through those points ignoring walls (box jumps) at a fixed time cost. See tools/make_routes.py.",
   "mirage": {
     "spawns": {"T": [[905, 413], [889, 404], [873, 394], [889, 385], [873, 375], [889, 366], [873, 355], [889, 346], [873, 336], [905, 336]], "CT": [[315, 703], [291, 703], [302, 722], [315, 738], [291, 738]]},
     "targets": {
@@ -11,19 +11,21 @@
     "spawns": {"T": [[294, 907], [303, 920], [318, 928], [332, 920], [340, 907], [368, 904], [376, 917], [390, 926], [404, 919], [413, 908], [442, 907], [451, 920], [465, 928], [479, 920], [487, 907]], "CT": [[643, 201], [639, 183], [621, 172], [604, 182], [599, 198]]},
     "mask": {"upper": {
       "solid_grey": true,
-      "_short": "CT Spawn is below Short: drop down anywhere, climb only up the boxes (two jumps).",
+      "_short": "CT Spawn is below Short: you can drop down, not climb up. CTs get onto Short from the Short Boost boxes (see the a-short target).",
       "_a_edge": "The A platform edge above A Cross: a drop, not a way up.",
       "_spawn_bar": "The grey bar splitting the CT Spawn zone stays passable, as before.",
-      "open": [[656, 262, 678, 290], [684, 182, 792, 191], [611, 150, 623, 248]],
+      "open": [[684, 182, 792, 191], [611, 150, 623, 248]],
       "ledges": [
-        {"line": [[682, 261], [660, 261]], "up": 0.8},
-        {"line": [[660, 261], [610, 261]]},
+        {"line": [[682, 261], [610, 261]]},
         {"line": [[682, 186], [794, 186]]}
       ]
     }},
     "targets": {
       "T": ["top-mid", "mid-doors", "catwalk", "outside-long", "long-doors", "upper-b-tunnels", "lower-b-tunnels"],
-      "CT": ["long-doors", "blue", "a-cross", "a-short", "ct-mid", "close-mid-doors", "b-doors", "b-window"]
+      "CT": ["long-doors", "blue", "a-cross",
+             {"to": "a-short", "_why": "Like A Cross, then 3 jumps up the Short Boost boxes (2 to peek, 3 to stand on Short).",
+              "via": [[739, 200], {"jump": [[724, 199], [700, 200], [674, 203], [662, 268]], "s": 1.5}]},
+             "ct-mid", "close-mid-doors", "b-doors", "b-window"]
     }
   },
   "inferno": {

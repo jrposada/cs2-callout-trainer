@@ -111,7 +111,17 @@ python3 tools/make_polygons.py --map dust2 --force   # rebuild one map from scra
 The radar has no heights, so obstacles are marked by hand in `routes.json` under `mask.<level>`:
 
 - `"solid_grey": true` treats the light-grey boxes, railings and wall bars as solid. This is only for radars where grey isn't floor; it's on for Dust II.
-- `"ledges"` are height steps, drawn as `{"line": [[x, y], ...], "up": 0.8, "down": 0}`. The low side is on the right as you walk the line from its first point to its last (y grows downwards). Dropping down costs `down` seconds (default 0). Climbing up costs `up` seconds, and a ledge without `up` can't be climbed at all. Jump time is added to the route time and saved as `stops`, so the Live dot waits there. For example, Dust II's Short is a ledge above CT Spawn that can only be climbed at the boxes.
+- `"ledges"` are height steps, drawn as `{"line": [[x, y], ...], "up": 0.8, "down": 0}`. The low side is on the right as you walk the line from its first point to its last (y grows downwards). Dropping down costs `down` seconds (default 0). Climbing up costs `up` seconds, and a ledge without `up` can't be climbed at all. Jump time is added to the route time and saved as `stops`, so the Live dot waits there. For example, Dust II's Short is a ledge above CT Spawn: you can drop off it, but you can't climb it.
+
+When a route needs a human touch, set these on its target:
+
+- `"from"`: the spawn index, or a list of them, the route may start from. By default it uses the fastest spawn.
+- `"via"`: waypoints to walk through, as `[x, y]` or `[x, y, "lower"]`.
+- `{"jump": [[x, y], ...], "s": 1.5}` as a `via` entry: from the previous point, go straight through these points, ignoring walls and ledges, and add `s` seconds. Use it for box climbs and boosts. Dust II's CT → A Short route works this way: it goes like A Cross, then makes three jumps up the Short Boost boxes onto Short.
+
+```json
+{"to": "a-short", "via": [[739, 200], {"jump": [[724, 199], [700, 200], [674, 203], [662, 268]], "s": 1.5}]}
+```
 
 ```sh
 python3 tools/fetch_spawns.py                   # refresh spawn points in routes.json (needs network)

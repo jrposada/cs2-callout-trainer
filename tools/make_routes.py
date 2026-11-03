@@ -227,36 +227,60 @@ def spawn_points(spec):
 
 
 def run(levels, pts):
-    """Path through pts [(x, y, level), ...] as ([(level, simplified pixels), ...], stops), or None.
-    stops are [[px along the whole path, seconds], ...] for the costly ledge crossings."""
-    segs = []
-    for (ax, ay, al), (bx, by, bl) in zip(pts, pts[1:]):
+    """Path through pts [(x, y, level, jump), ...] as ([(level, simplified pixels), ...], stops), or None.
+    jump is None (walk there on the floor) or (points, seconds): get there in a straight line
+    through points, ignoring walls and ledges, for a fixed number of seconds (box jumps).
+    stops are [[px along the whole path, seconds], ...] for jumps and costly ledge crossings."""
+    segs = []                   # [level, [("walk", pixels) | ("jump", points, seconds)]]
+    for (ax, ay, al, _), (bx, by, bl, jump) in zip(pts, pts[1:]):
         if al != bl:            # level change: start a new segment at b
             segs.append([bl, []])
+            continue
+        if not segs or segs[-1][0] != al:
+            segs.append([al, []])
+        if jump:
+            segs[-1][1].append(("jump", [tuple(q) for q in jump[0]], jump[1]))
             continue
         p = levels[al].path((ax, ay), (bx, by))
         if p is None:
             return None
-        if not segs or segs[-1][0] != al:
-            segs.append([al, []])
-        segs[-1][1].extend(p if not segs[-1][1] else p[1:])
+        segs[-1][1].append(("walk", p))
     simple, stops, done_px = [], [], 0.0
-    for lv, p in segs:
-        if not p:
-            continue
-        out, start = [], 0
-        # Simplify between ledge crossings so the line crosses each where the path does.
-        for k, s in levels[lv].stops(p) + [(len(p) - 1, None)]:
-            piece = rdp(p[start:k + 1], RDP_EPS, levels[lv])
-            out.extend(piece if not out else piece[1:])
-            if s is not None:
+    for lv, items in segs:
+        out = []
+        for item in items:
+            if item[0] == "jump":
+                _, jp, s = item
+                if not out:
+                    out.append(jp[0])
                 if s > 0:
                     stops.append([round(done_px + plen(out), 1), s])
-                out.append(p[k + 1])
-                start = k + 1
-        simple.append((lv, out))
-        done_px += plen(out)
+                out.extend(jp if out[-1] != jp[0] else jp[1:])
+                continue
+            p, start = item[1], 0
+            # Simplify between ledge crossings so the line crosses each where the path does.
+            for k, s in levels[lv].stops(p) + [(len(p) - 1, None)]:
+                piece = rdp(p[start:k + 1], RDP_EPS, levels[lv])
+                out.extend(piece if not out else piece[1:])
+                if s is not None:
+                    if s > 0:
+                        stops.append([round(done_px + plen(out), 1), s])
+                    out.append(p[k + 1])
+                    start = k + 1
+        if out:
+            simple.append((lv, out))
+            done_px += plen(out)
     return simple, stops
+
+
+def waypoint(v):
+    """A "via" entry as (x, y, level or None, jump or None).
+    [x, y] or [x, y, level]: walk there. {"jump": [[x, y], ...], "s": seconds}: jump
+    through those points (the last one is where you land), see run()."""
+    if isinstance(v, dict):
+        jp = v["jump"] if isinstance(v["jump"][0], (list, tuple)) else [v["jump"]]
+        return (jp[-1][0], jp[-1][1], v.get("level"), (jp, float(v.get("s", 0))))
+    return (v[0], v[1], v[2] if len(v) > 2 else None, None)
 
 
 def build_map(m, spec, report):
@@ -270,14 +294,19 @@ def build_map(m, spec, report):
             t = {"to": t} if isinstance(t, str) else t
             c = callouts[t["to"]]
             tlevel = c.get("level", "upper")
-            tail = [(v[0], v[1], v[2] if len(v) > 2 else None) for v in t.get("via", [])]
-            tail.append((c["x"], c["y"], tlevel))
-            # Run it from every spawn on this side and keep only the fastest.
+            tail = [waypoint(v) for v in t.get("via", [])]
+            tail.append((c["x"], c["y"], tlevel, None))
+            # "from" pins the spawn (an index, or a list of them to choose from).
+            only = t.get("from")
+            only = None if only is None else set(only if isinstance(only, list) else [only])
+            # Run it from every allowed spawn on this side and keep only the fastest.
             best = None
             for i, sp in enumerate(spawns[side]):
-                pts = [sp]
-                for x, y, lv in tail[:-1]:
-                    pts.append((x, y, lv or pts[-1][2]))
+                if only is not None and i not in only:
+                    continue
+                pts = [sp + (None,)]
+                for x, y, lv, jump in tail[:-1]:
+                    pts.append((x, y, lv or pts[-1][2], jump))
                 pts.append(tail[-1])
                 if pts[-2][2] != tlevel:
                     continue
