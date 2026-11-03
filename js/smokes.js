@@ -59,7 +59,6 @@
   const S = {
     focus: null,       // landing callout id whose throws are shown
     sel: null,         // selected line-up id
-    sites: new Set(),  // target filter; empty = every site
     drawnFocus: null,  // the focus whose arcs last drew in
     round: null,       // the Find it round, see startRound()
   };
@@ -146,7 +145,13 @@
     return out.sort((x, y) => so[x.site] - so[y.site] || (x.side === y.side ? 0 : x.side === "t" ? -1 : 1) || x.name.localeCompare(y.name));
   }
   const side = () => (SIDES.some((s) => s[0] === A.prefs.smkSide) ? A.prefs.smkSide : "both");
-  const passes = (l) => (side() === "both" || l.side === side()) && (!S.sites.size || S.sites.has(l.site));
+  // Target filter (A, Mid, B; empty = every site), shared by Explore and Find it and remembered like the side.
+  const sites = () => new Set((Array.isArray(A.prefs.smkSites) ? A.prefs.smkSites : []).filter((s) => SITE_NAME[s]));
+  function setSites(set) {
+    A.prefs.smkSites = SITES.map(([s]) => s).filter((s) => set.has(s));
+    A.savePrefs();
+  }
+  const passes = (l) => { const ss = sites(); return (side() === "both" || l.side === side()) && (!ss.size || ss.has(l.site)); };
   const filtered = () => all().filter(passes);
   // Line-ups grouped by where they land.
   function targets(list) {
@@ -274,6 +279,12 @@
   // One state back: selected -> focused -> idle. False when there is nothing to undo.
   // Esc never switches content or mode, so Find it and Name it have nothing to step back from.
   function back() {
+    if (view() === "find") {
+      // Mid-round Esc skips the "Which throw?" bonus and otherwise does nothing (End round is the way out).
+      const q = S.round;
+      if (q && !q.done && q.phase === "reveal") { skipThrow(); return true; }
+      return false;
+    }
     if (view() !== "explore") return false;
     if (S.sel) {
       S.sel = null;
@@ -555,9 +566,7 @@
     A.panel.innerHTML = `
       <p class="lede">${n === total ? `${total} smoke${total === 1 ? "" : "s"}` : `${n} of ${total} smokes`} on ${esc(m.name)}. ${n ? "Tap a landing spot to see where it's thrown from." : "None match these filters."}</p>
       <div class="row smk-ctrl"><span class="field-label">Side</span>${seg("smkSide", SIDES, side(), "Side")}</div>
-      <div class="row smk-ctrl" role="group" aria-label="Target"><span class="field-label">Target</span>
-        ${SITES.map(([v, l]) => `<button type="button" class="flt-chip" data-site="${v}" aria-pressed="${S.sites.has(v)}">${l}</button>`).join("")}
-      </div>
+      ${targetRow()}
       ${sel ? card(sel, "is-sticky") : ""}
       <div class="smk-groups" id="smkList">
         ${groups.map(([s, ls]) => `<h4 class="smk-group">${SITE_HEAD[s]}</h4><ul class="smk-list">${ls.map(row).join("")}</ul>`).join("")}
@@ -567,13 +576,7 @@
     // On narrow screens the panel sits below the map, so echo the selection on the stage.
     A.$("#stagePrompt").innerHTML = sel ? `${esc(sel.name)}<span class="sp-desc">Aim: ${esc(sel.aim)}</span>` : "";
     bindSeg("smkSide", setSide);
-    A.panel.querySelectorAll(".flt-chip").forEach((b) => (b.onclick = () => {
-      const s = b.dataset.site;
-      if (S.sites.has(s)) S.sites.delete(s); else S.sites.add(s);
-      render();
-      const k = filtered().length;
-      A.announce(`${S.sites.size ? [...S.sites].map((x) => SITE_NAME[x]).join(", ") : "Every target"}: ${k} line-up${k === 1 ? "" : "s"}.`);
-    }));
+    bindTargets();
     A.$("#smkList").onclick = (e) => {
       const b = e.target.closest("button[data-id]");
       if (!b) return;
@@ -585,6 +588,22 @@
       if (f) f.focus({ preventScroll: true });
     }
     draw(list);
+  }
+  function targetRow() {
+    const ss = sites();
+    return `<div class="row smk-ctrl" role="group" aria-label="Target"><span class="field-label">Target</span>
+        ${SITES.map(([v, l]) => `<button type="button" class="flt-chip" data-site="${v}" aria-pressed="${ss.has(v)}">${l}</button>`).join("")}
+      </div>`;
+  }
+  function bindTargets() {
+    A.panel.querySelectorAll(".flt-chip").forEach((b) => (b.onclick = () => {
+      const ss = sites(), s = b.dataset.site;
+      if (ss.has(s)) ss.delete(s); else ss.add(s);
+      setSites(ss);
+      render();
+      const k = filtered().length;
+      A.announce(`${ss.size ? [...ss].map((x) => SITE_NAME[x]).join(", ") : "Every target"}: ${k} line-up${k === 1 ? "" : "s"}.`);
+    }));
   }
   function bindSeg(id, fn) {
     const box = A.panel.querySelector("#" + id);
@@ -599,12 +618,12 @@
   // ---------- drill ----------
   // Up to ROUND_MAX line-ups on the chosen side: new and learning ones first, then the learned, shuffled.
   function startRound() {
-    const pool = all().filter((l) => side() === "both" || l.side === side());
+    const pool = all().filter(passes);
     if (!pool.length) return;
     const fresh = shuffle(pool.filter((l) => stage(l.id) !== "learned"));
     const learned = shuffle(pool.filter((l) => stage(l.id) === "learned"));
     const items = shuffle(fresh.concat(learned).slice(0, Math.min(ROUND_MAX, pool.length)));
-    S.round = { items, i: 0, results: [], phase: "ask", done: false, learned0: pool.filter((l) => stage(l.id) === "learned").length };
+    S.round = { items, i: 0, results: [], phase: "ask", done: false, pool: pool.map((l) => l.id), learned0: pool.filter((l) => stage(l.id) === "learned").length };
     S.sel = S.focus = null;
     askQuestion();
   }
@@ -633,7 +652,7 @@
     const R = landR(), xs = [p.x, l.from.x, l.to.x - R, l.to.x + R], ys = [p.y, l.from.y, l.to.y - R, l.to.y + R];
     A.fitBox([Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)], 0.15);
     const m = A.meters(d);
-    A.announce(`${RESULT[kind]}, ${m} metre${m === 1 ? "" : "s"} off. Stand: ${l.stand} Which throw is it? Press 1 to ${q.options.length}.`);
+    A.announce(`${RESULT[kind]}, ${m} metre${m === 1 ? "" : "s"} off. Stand: ${l.stand} Which throw is it? Press 1 to ${q.options.length}, or Escape to skip.`);
     const f = A.panel.querySelector(".smk-choices .choice");
     if (f) f.focus({ preventScroll: true });
   }
@@ -646,6 +665,20 @@
     q.phase = "picked";
     render();
     A.announce(`${r.throwOk ? "Right" : `No, it's ${right}`}. Aim: ${l.aim}`);
+    showAim();
+  }
+  // Skip the bonus: show the right throw and the aim, with nothing picked (not counted in the summary).
+  function skipThrow() {
+    const q = S.round;
+    if (!q || q.done || q.phase !== "reveal") return;
+    q.results[q.i].skipped = true;
+    q.phase = "picked";
+    render();
+    const l = cur();
+    A.announce(`Skipped. It's ${techLabel(l.technique)}. Aim: ${l.aim}`);
+    showAim();
+  }
+  function showAim() {
     const ab = A.panel.querySelector(".smk-aimblock");
     if (ab) ab.scrollIntoView({ block: "nearest" });
     const n = A.panel.querySelector("#smkNext");
@@ -693,7 +726,8 @@
     const right = techLabel(l.technique);
     const choices = r ? `<div class="choices smk-choices" id="smkChoices">${q.options.map((o, i) => {
       let cls = "choice";
-      if (picked) { if (o === right) cls += " right"; else if (r.pick === o) cls += " wrong"; }
+      // Once answered, the other options are marked so narrow screens can drop them and fit the aim.
+      if (picked) cls += o === right ? " right" : r.pick === o ? " wrong" : " is-other";
       return `<button type="button" class="${cls}" data-i="${i}" ${picked ? "disabled" : ""}><kbd>${i + 1}</kbd>${o}</button>`;
     }).join("")}</div>` : "";
     const standShot = l.shots.stand ? shotFig(l, "stand", "smk-dshot") : "";
@@ -712,7 +746,8 @@
         ${picked ? `<div class="smk-aimblock${aimShot ? " has-shot" : ""}">${aimShot}<div class="smk-aimtext"><span class="smk-k">Aim</span><p class="smk-aim">${esc(l.aim)}</p><p class="smk-tech-note">${techChips(l)}</p></div></div>` : ""}`
       : `<p class="kbd-hint smk-hint">${A.TOUCH ? "Tap your throw spot. Drag to pan, pinch to zoom." : "Click your throw spot. Drag to pan, scroll to zoom."}</p>`}
       <div class="step-actions">
-        ${picked ? `<div class="row"><button type="button" class="btn primary" id="smkNext">${q.i + 1 < q.items.length ? "Next" : "See results"}</button>${A.TOUCH ? "" : `<span class="kbd-hint"><kbd>Enter</kbd></span>`}</div>` : ""}
+        ${picked ? `<div class="row"><button type="button" class="btn primary" id="smkNext">${q.i + 1 < q.items.length ? "Next" : "See results"}</button>${A.TOUCH ? "" : `<span class="kbd-hint"><kbd>Enter</kbd></span>`}</div>`
+          : r ? `<div class="row"><button type="button" class="btn small" id="smkSkip">Skip</button>${A.TOUCH ? "" : `<span class="kbd-hint"><kbd>Esc</kbd></span>`}</div>` : ""}
         <div class="row"><span class="spacer"></span><button type="button" class="btn quiet small" id="smkQuit">End round</button></div>
       </div>`;
     const ch = A.$("#smkChoices");
@@ -720,20 +755,23 @@
     bindShots(l);
     const nx = A.$("#smkNext");
     if (nx) nx.onclick = nextQuestion;
+    const sk = A.$("#smkSkip");
+    if (sk) sk.onclick = skipThrow;
     A.$("#smkQuit").onclick = endRound;
     drawDrill();
   }
   function renderDrillIntro(every) {
     const m = A.state.map;
-    const pool = every.filter((l) => side() === "both" || l.side === side());
+    const pool = every.filter(passes);
     const n = { learned: 0, learning: 0, fresh: 0 };
-    for (const l of every) { const st = stage(l.id); if (st === "learned") n.learned++; else if (st === "learning") n.learning++; else n.fresh++; }
+    for (const l of pool) { const st = stage(l.id); if (st === "learned") n.learned++; else if (st === "learning") n.learning++; else n.fresh++; }
     const seen = prog[m.id] && Object.keys(prog[m.id]).length;
     const size = Math.min(ROUND_MAX, pool.length);
     A.panel.innerHTML = `
       <p class="lede">You get a smoke and where it lands. <strong>Click where you stand to throw it.</strong> Within ${Math.round(HIT_U * 0.0254 * 10) / 10} m is a hit; within ${Math.round(CLOSE_U * 0.0254)} m is close. Then pick the throw, for a bonus that doesn't touch your streak.</p>
       <p class="lede smk-approx"><span class="acc">◌ Approximate</span> These line-ups are approximate and not yet checked in game.</p>
       <div class="row smk-ctrl"><span class="field-label">Side</span>${seg("smkSide", SIDES, side(), "Side")}</div>
+      ${targetRow()}
       <div class="row"><button type="button" class="btn primary" id="smkStart" ${size ? "" : "disabled"}>Start ${esc(m.name)} round (${size})</button></div>
       <div class="breakdown">
         <p class="counts"><strong class="n-learned">${n.learned} learned</strong> · <span class="n-learning">${n.learning} learning</span> · <span class="n-new">${n.fresh} new</span></p>
@@ -741,6 +779,7 @@
         ${seen ? `<button type="button" class="link-btn" id="smkReset">Reset ${esc(m.name)} smokes</button>` : ""}
       </div>`;
     bindSeg("smkSide", setSide);
+    bindTargets();
     A.$("#smkStart").onclick = startRound;
     const rs = A.$("#smkReset");
     if (rs) rs.onclick = () => {
@@ -760,14 +799,15 @@
     const hits = q.results.filter((r) => r.kind === "hit").length;
     const picks = q.results.filter((r) => r.pick);
     const rightThrows = picks.filter((r) => r.throwOk).length;
+    const skips = q.results.filter((r) => r.skipped).length;
     const missed = [...new Set(q.results.filter((r) => r.kind !== "hit").map((r) => r.id))].map((id) => q.items.find((l) => l.id === id));
-    const pool = all().filter((l) => side() === "both" || l.side === side());
+    const pool = all().filter((l) => q.pool.includes(l.id));
     const learned = pool.filter((l) => stage(l.id) === "learned").length, gain = learned - q.learned0;
     A.panel.innerHTML = `
       ${drillProgress()}
       <div>
         <div class="score-big">${hits}<small> / ${total}</small></div>
-        <p class="gain">Throw technique: ${rightThrows} of ${picks.length} right.</p>
+        <p class="gain">Throw technique: ${rightThrows} of ${picks.length} right${skips ? `, ${skips} skipped` : ""}.</p>
         <p class="gain">${esc(m.name)} smokes: ${q.learned0} → ${learned} learned <span class="${gain > 0 ? "up" : ""}">(${gain > 0 ? "+" : gain < 0 ? "−" : "±"}${Math.abs(gain)})</span></p>
         <p class="lede">${missed.length ? `${missed.length} to work on, shown on the radar. Pick one to see it in Explore.` : "Clean round. Every throw spot within a hit."}</p>
       </div>
@@ -807,7 +847,7 @@
     for (const u of [HIT_U, CLOSE_U]) A.el("circle", { class: "smk-tol", cx: l.from.x, cy: l.from.y, r: A.unitsToPx(u) }, g);
     const pts = { x1: r.p.x, y1: r.p.y, x2: l.from.x, y2: l.from.y };
     if (r.kind !== "hit") { A.el("line", { class: "fb-casing", ...pts }, g); A.el("line", { class: "fb-line", ...pts }, g); }
-    A.el("circle", { class: "fb-guess" + (r.kind === "hit" ? " hit" : ""), cx: r.p.x, cy: r.p.y, "data-r": 5 }, g);
+    A.el("circle", { class: "fb-guess" + (r.kind !== "miss" ? " " + r.kind : ""), cx: r.p.x, cy: r.p.y, "data-r": 5 }, g);
     rescale(A.unit());
   }
   // A line-up as when selected: dashed arc, filled throw spot and its facing tick.
@@ -830,7 +870,7 @@
       drawLineup(g, l);
     }
     for (const r of S.round.results) {
-      if (r.kind !== "hit") A.el("circle", { class: "fb-guess", cx: r.p.x, cy: r.p.y, "data-r": 5 }, g);
+      if (r.kind !== "hit") A.el("circle", { class: "fb-guess" + (r.kind === "close" ? " close" : ""), cx: r.p.x, cy: r.p.y, "data-r": 5 }, g);
     }
     rescale(A.unit());
   }
@@ -885,7 +925,7 @@
       if (!l) { if (S.sel || S.focus) { S.sel = S.focus = null; render(); } return; }
       if (!passes(l)) {
         if (side() !== "both" && side() !== l.side) { A.prefs.smkSide = "both"; A.savePrefs(); }
-        S.sites.clear();
+        setSites(new Set());
       }
       select(l.id, "route");
     },
