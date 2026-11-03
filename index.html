@@ -49,13 +49,27 @@
       </section>
 
       <aside class="panel">
-        <div class="modes" role="group" aria-label="Mode">
-          <button type="button" data-mode="explore">Explore</button>
-          <button type="button" data-mode="name">Name it</button>
-          <button type="button" data-mode="find">Find it</button>
-          <button type="button" data-mode="edit">Edit</button>
+        <div class="panel-nav">
+          <div class="nav-top">
+            <div class="seg content-seg" role="group" aria-label="Learn">
+              <button type="button" data-content="callouts" aria-pressed="true">Callouts</button>
+              <button type="button" data-content="smokes" aria-pressed="false" tabindex="-1">Smokes</button>
+            </div>
+            <span class="spacer"></span>
+            <button type="button" class="nav-tool" data-tool="live" aria-pressed="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Live</button>
+          </div>
+          <div class="modes" role="tablist" aria-label="Mode">
+            <button type="button" role="tab" id="tab-explore" data-mode="explore" aria-selected="true" aria-controls="panelBody">Explore</button>
+            <button type="button" role="tab" id="tab-name" data-mode="name" aria-selected="false" aria-controls="panelBody" tabindex="-1">Name it</button>
+            <button type="button" role="tab" id="tab-find" data-mode="find" aria-selected="false" aria-controls="panelBody" tabindex="-1">Find it</button>
+          </div>
+          <div class="tool-head" hidden>
+            <h2 class="tool-title"></h2>
+            <button type="button" class="btn small" data-tool-done>Done</button>
+          </div>
         </div>
-        <div class="panel-body" id="panelBody"></div>
+        <div class="panel-body" id="panelBody" role="tabpanel" aria-labelledby="tab-explore"></div>
         <div id="sr-status" class="sr-only" role="status" aria-live="polite"></div>
       </aside>
     </main>

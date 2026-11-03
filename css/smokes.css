@@ -1,4 +1,4 @@
-/* Smokes mode (js/smokes.js): line-up list, detail card and the radar layer */
+/* Smokes content (js/smokes.js): line-up list, detail card and the radar layer */
 :root {
   --smoke: #cfd6de;
   --smoke-fill: rgba(207, 214, 222, 0.16);
@@ -6,9 +6,9 @@
 }
 
 /* Zones are only a backdrop here, and their names stay off. */
-.mode-smokes .zone { opacity: .35; }
-.mode-smokes .label { display: none !important; }
-.mode-smokes .radar { cursor: pointer; }
+.content-smokes .zone { opacity: .35; }
+.content-smokes .label { display: none !important; }
+.content-smokes .radar { cursor: pointer; }
 
 /* Panel: filters */
 .smk-ctrl { flex-wrap: nowrap; }
@@ -158,8 +158,7 @@
 .smk-layer.has-sel .smk-land:not(.is-sel), .smk-layer.has-sel .smk-count,
 .smk-layer .is-dim { opacity: .15; }
 
-/* Drill */
-#smkView { align-self: flex-start; }
+/* Find it */
 .smk-approx { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .result .acc { display: inline-block; margin-top: 6px; }
 .result .desc strong { color: var(--text); }
@@ -168,18 +167,18 @@
 .smk-choices { grid-template-columns: repeat(2, 1fr); }
 .smk-choices .choice { min-height: 44px; font-size: 18px; }
 .smk-aimblock { padding: 10px 14px; border-radius: var(--radius-m); background: var(--ink); border: 1px solid var(--line); }
-/* Drill steps: once answered, the prompt shrinks, and Next / End round stay stuck to the panel's foot. */
-.mode-smokes.quiz-answered .prompt .ask, .mode-smokes.quiz-answered .prompt .hint { display: none; }
-.mode-smokes.quiz-answered .prompt .callname { font-size: 34px; }
-.mode-smokes.quiz-step .step-actions {
+/* Find it steps: once answered, the prompt shrinks, and Next / End round stay stuck to the panel's foot. */
+.content-smokes.quiz-answered .prompt .ask, .content-smokes.quiz-answered .prompt .hint { display: none; }
+.content-smokes.quiz-answered .prompt .callname { font-size: 34px; }
+.content-smokes.quiz-step .step-actions {
   display: flex; align-items: center; gap: 8px;
   position: sticky; bottom: -20px; z-index: 1;
   margin: 0 -20px -20px; padding: 10px 20px 20px;
   background: var(--panel);
 }
-.mode-smokes.quiz-step .step-actions > .row:last-child { margin-left: auto; }
+.content-smokes.quiz-step .step-actions > .row:last-child { margin-left: auto; }
 .smk-aimblock { scroll-margin-bottom: 76px; }
-/* Drill: the stand shot sits beside the result, the aim shot beside the aim text. A missing file just hides. */
+/* Find it: the stand shot sits beside the result, the aim shot beside the aim text. A missing file just hides. */
 .smk-result.has-shot, .smk-aimblock.has-shot { display: grid; grid-template-columns: 1fr 132px; gap: 10px; align-items: start; }
 .smk-aimblock.has-shot { grid-template-columns: 132px 1fr; }
 .smk-dshot.is-missing { display: none; }
@@ -191,33 +190,33 @@
 .smk-layer .fb-guess { pointer-events: none; }
 
 @media (max-width: 860px) {
-  .mode-smokes .panel-body .kbd-hint { display: none; }
-  /* Drill steps keep one panel height from question to reveal, so the radar doesn't jump. */
-  .mode-smokes.quiz-step .main { grid-template-rows: minmax(140px, 1fr) minmax(0, 54dvh); }
-  .mode-smokes.smk-picked .smk-ask { display: none; }
-  .mode-smokes.quiz-answered .prompt .callname { font-size: 30px; }
-  .mode-smokes.quiz-step .step-actions { bottom: -12px; margin: 0 -14px -12px; padding: 0 14px 12px; }
+  .content-smokes .panel-body .kbd-hint { display: none; }
+  /* Find it steps keep one panel height from question to reveal, so the radar doesn't jump. */
+  .content-smokes.quiz-step .main { grid-template-rows: minmax(140px, 1fr) minmax(0, 54dvh); }
+  .content-smokes.smk-picked .smk-ask { display: none; }
+  .content-smokes.quiz-answered .prompt .callname { font-size: 30px; }
+  .content-smokes.quiz-step .step-actions { bottom: -12px; margin: 0 -14px -12px; padding: 0 14px 12px; }
   .smk-aimblock { scroll-margin-bottom: 60px; }
-  .mode-smokes.quiz-step .smk-choices { grid-template-columns: repeat(3, 1fr); gap: 6px; }
-  .mode-smokes.quiz-step .smk-choices .choice { padding: 4px 6px; gap: 6px; font-size: 15px; line-height: 1.05; justify-content: center; text-align: center; }
-  .mode-smokes.quiz-step .smk-choices kbd { display: none; }
-  .mode-smokes.quiz-step .smk-result.has-shot { grid-template-columns: 1fr 96px; gap: 8px; }
-  .mode-smokes.quiz-step .smk-aimblock.has-shot { grid-template-columns: 96px 1fr; gap: 8px; }
-  .mode-smokes.quiz-step .smk-dshot figcaption { display: none; }
+  .content-smokes.quiz-step .smk-choices { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .content-smokes.quiz-step .smk-choices .choice { padding: 4px 6px; gap: 6px; font-size: 15px; line-height: 1.05; justify-content: center; text-align: center; }
+  .content-smokes.quiz-step .smk-choices kbd { display: none; }
+  .content-smokes.quiz-step .smk-result.has-shot { grid-template-columns: 1fr 96px; gap: 8px; }
+  .content-smokes.quiz-step .smk-aimblock.has-shot { grid-template-columns: 96px 1fr; gap: 8px; }
+  .content-smokes.quiz-step .smk-dshot figcaption { display: none; }
   .smk-shots { gap: 8px; }
   .smk-lb { padding: 0; }
   .smk-lb-box { width: 100%; height: 100%; max-width: none; border-radius: 0; border: 0; justify-content: center; }
   .smk-lb-pic img { max-height: calc(100dvh - 230px); }
   .smk-lb-nav .kbd-hint { display: none; }
-  .mode-smokes.quiz-step .result .desc { -webkit-line-clamp: 3; }
-  .mode-smokes.quiz-step .result .acc { margin: 0 0 0 8px; vertical-align: 1px; }
-  .mode-smokes.quiz-step .result .desc { margin-top: 2px; }
-  .mode-smokes.quiz-step .smk-aimblock { display: flex; align-items: baseline; gap: 10px; padding: 6px 10px; }
-  .mode-smokes.quiz-step .smk-aimblock.has-shot { display: grid; align-items: start; }
-  .mode-smokes.quiz-step .smk-aimtext { display: flex; align-items: baseline; gap: 10px; }
-  .mode-smokes.quiz-step .smk-aimblock.has-shot .smk-aimtext { display: block; }
-  .mode-smokes.quiz-step .smk-aim { font-size: 17px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
-  .mode-smokes.quiz-step .smk-tech-note { display: none; }
+  .content-smokes.quiz-step .result .desc { -webkit-line-clamp: 3; }
+  .content-smokes.quiz-step .result .acc { margin: 0 0 0 8px; vertical-align: 1px; }
+  .content-smokes.quiz-step .result .desc { margin-top: 2px; }
+  .content-smokes.quiz-step .smk-aimblock { display: flex; align-items: baseline; gap: 10px; padding: 6px 10px; }
+  .content-smokes.quiz-step .smk-aimblock.has-shot { display: grid; align-items: start; }
+  .content-smokes.quiz-step .smk-aimtext { display: flex; align-items: baseline; gap: 10px; }
+  .content-smokes.quiz-step .smk-aimblock.has-shot .smk-aimtext { display: block; }
+  .content-smokes.quiz-step .smk-aim { font-size: 17px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+  .content-smokes.quiz-step .smk-tech-note { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
