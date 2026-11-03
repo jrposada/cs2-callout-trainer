@@ -166,7 +166,11 @@
 .smk-ask { margin: 0; color: var(--muted); }
 .tag-bonus { margin-left: 4px; padding: 1px 7px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; color: var(--muted); }
 .smk-choices { grid-template-columns: repeat(2, 1fr); }
-.smk-choices .choice { min-height: 44px; font-size: 18px; }
+/* Tighter than the shared .choice so "Walk-jump · Left" fits on one line in half the panel. */
+.smk-choices .choice { min-height: 44px; padding: 6px 10px; gap: 8px; font-size: 17px; text-wrap: balance; }
+.smk-choices .choice kbd { width: 20px; height: 20px; }
+/* A Close doesn't count, but it isn't a miss either: gold, like its result card and progress tick. */
+.smk-layer .fb-guess.close { fill: var(--t-gold); }
 .smk-aimblock { padding: 10px 14px; border-radius: var(--radius-m); background: var(--ink); border: 1px solid var(--line); }
 /* Drill steps: once answered, the prompt shrinks, and Next / End round stay stuck to the panel's foot. */
 .mode-smokes.quiz-answered .prompt .ask, .mode-smokes.quiz-answered .prompt .hint { display: none; }
@@ -190,8 +194,28 @@
 .smk-tol { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 3 4; vector-effect: non-scaling-stroke; }
 .smk-layer .fb-guess { pointer-events: none; }
 
+/* Desktop card: labels run in before their text so it uses the full width, and the screenshot captions
+   sit on the thumbnails. Keeps the card short enough to leave room for the list. */
+@media (min-width: 861px) {
+  .smk-card .smk-rows { gap: 6px; margin-top: 10px; }
+  .smk-card .smk-row { display: block; }
+  .smk-card .smk-row dt { display: inline; margin-right: 6px; }
+  .smk-card .smk-row dd { display: inline; }
+  .smk-card .smk-row dd.smk-aim { font-size: 18px; }
+  .smk-card .smk-row dd.smk-techs { display: inline-flex; vertical-align: middle; }
+  .smk-card .smk-shots { margin-top: 10px; }
+  .smk-card .smk-shot:not(.is-missing) { position: relative; }
+  .smk-card .smk-shot:not(.is-missing) figcaption {
+    position: absolute; left: 6px; bottom: 5px; margin: 0; padding: 2px 6px;
+    border-radius: 3px; background: rgba(14, 18, 23, .8); color: var(--text); font-size: 11px; pointer-events: none;
+  }
+  .smk-card > .meta { margin-top: 8px; }
+}
+
 @media (max-width: 860px) {
   .mode-smokes .panel-body .kbd-hint { display: none; }
+  /* Once the throw is picked, keep only the right answer (and a wrong pick) so the aim fits without scrolling. */
+  .mode-smokes.quiz-step .smk-choices .choice.is-other { display: none; }
   /* Drill steps keep one panel height from question to reveal, so the radar doesn't jump. */
   .mode-smokes.quiz-step .main { grid-template-rows: minmax(140px, 1fr) minmax(0, 54dvh); }
   .mode-smokes.smk-picked .smk-ask { display: none; }
