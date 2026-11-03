@@ -315,7 +315,7 @@
     const R = landR();
     A.fitBox([Math.min(l.from.x, l.to.x - R), Math.min(l.from.y, l.to.y - R), Math.max(l.from.x, l.to.x + R), Math.max(l.from.y, l.to.y + R)], 0.15);
   }
-  // how: "list" (a row or [ ]), "radar" (a throw spot), "route" (a link)
+  // how: "list" (a row or [ ]), "radar" (a landing or throw spot on the map), "route" (a link)
   function select(id, how) {
     const l = all().find((x) => x.id === id);
     if (!l) return;
