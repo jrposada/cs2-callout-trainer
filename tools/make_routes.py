@@ -30,10 +30,13 @@ How it works
     tools/fetch_spawns.py). Each target is routed from each of them and only
     the shortest run is kept; "from" in the output is that spawn's index.
 
-tools/routes.json holds the spawns and targets. Run:
+tools/routes.json holds the spawns and targets. tools/route_edits.json holds
+routes fixed by hand in the app (Live > select a route > Edit route): per map,
+side and target, a {"from", "via"} that replaces the target's own. Run:
   python3 tools/make_routes.py                 # all maps
   python3 tools/make_routes.py --map mirage    # one map (others are kept)
   python3 tools/make_routes.py --png DIR       # also draw an overlay per map
+  python3 tools/make_routes.py --apply FILE    # merge the app's download into route_edits.json, rebuild
 
 Needs: pip install numpy pillow scipy
 """
@@ -53,6 +56,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from make_polygons import ROOT, floor_mask, load_maps, snap  # noqa: E402
 
 SPEC = ROOT / "tools" / "routes.json"
+EDITS = ROOT / "tools" / "route_edits.json"
 OUT = ROOT / "data" / "routes.js"
 
 SPEED = 250            # game units / second (knife)
@@ -275,15 +279,20 @@ def run(levels, pts):
 
 def waypoint(v):
     """A "via" entry as (x, y, level or None, jump or None).
-    [x, y] or [x, y, level]: walk there. {"jump": [[x, y], ...], "s": seconds}: jump
-    through those points (the last one is where you land), see run()."""
+    [x, y] or [x, y, level]: walk there. {"jump": [[x, y], [x, y, s], ...], "s": seconds}:
+    go straight through those points (the last one is where you land), see run(). The
+    time is "s" plus each point's own s (one jump each; a point without one is free)."""
     if isinstance(v, dict):
         jp = v["jump"] if isinstance(v["jump"][0], (list, tuple)) else [v["jump"]]
-        return (jp[-1][0], jp[-1][1], v.get("level"), (jp, float(v.get("s", 0))))
+        s = float(v.get("s", 0)) + sum(float(q[2]) for q in jp if len(q) > 2)
+        jp = [(q[0], q[1]) for q in jp]
+        return (jp[-1][0], jp[-1][1], v.get("level"), (jp, s))
     return (v[0], v[1], v[2] if len(v) > 2 else None, None)
 
 
-def build_map(m, spec, report):
+def build_map(m, spec, report, fixes=None):
+    """fixes: {side: {target id: {"from", "via"}}} from route_edits.json, replacing the target's own."""
+    fixes = fixes or {}
     callouts = {c["id"]: c for c in m["callouts"]}
     edits = spec.get("mask", {})
     levels = {lv: Level(m, lv, edits.get(lv, {})) for lv in m["levels"]}
@@ -292,6 +301,9 @@ def build_map(m, spec, report):
     for side in ("T", "CT"):
         for t in spec["targets"][side]:
             t = {"to": t} if isinstance(t, str) else t
+            fix = fixes.get(side, {}).get(t["to"])
+            if fix is not None:
+                t = {"to": t["to"], **{k: v for k, v in fix.items() if v is not None and k in ("from", "via")}}
             c = callouts[t["to"]]
             tlevel = c.get("level", "upper")
             tail = [waypoint(v) for v in t.get("via", [])]
@@ -327,6 +339,13 @@ def build_map(m, spec, report):
                  "units": int(round(units)), "time": round(secs, 1)}
             if stops:
                 r["stops"] = stops
+            # The hand-set parts, so the app's route editor can start from them.
+            if t.get("from") is not None:
+                r["pin"] = t["from"]
+            if t.get("via"):
+                r["via"] = t["via"]
+            if fix is not None:
+                r["edited"] = True
             if len(segs) > 1:
                 r["segments"] = [{"level": lv, "path": [v for xy in p for v in xy]} for lv, p in segs]
             routes.append(r)
@@ -346,6 +365,18 @@ def fmt(maps):
             "      " + json.dumps(r, separators=(", ", ": ")) for r in m["routes"]) + "\n    ]\n  }"
         blocks.append(s)
     return "\n".join(lines) + "\n" + ",\n".join(blocks) + "\n};\n"
+
+
+def fmt_edits(edits):
+    """route_edits.json with one line per hand-fixed target, so diffs stay readable."""
+    maps = []
+    for mid, sides in edits.items():
+        ss = []
+        for side, targets in sides.items():
+            ts = [f"      {json.dumps(to)}: {json.dumps(fix, separators=(', ', ': '))}" for to, fix in targets.items()]
+            ss.append(f"    {json.dumps(side)}: {{\n" + ",\n".join(ts) + "\n    }")
+        maps.append(f"  {json.dumps(mid)}: {{\n" + ",\n".join(ss) + "\n  }")
+    return "{\n" + ",\n".join(maps) + "\n}\n" if maps else "{}\n"
 
 
 def load_routes():
@@ -411,18 +442,38 @@ def main():
     ap.add_argument("--map", help="only this map id, e.g. mirage")
     ap.add_argument("--png", help="write an overlay image per map into this folder")
     ap.add_argument("--mask", action="store_true", help="tint the walkable mask in the overlay")
+    ap.add_argument("--apply", metavar="FILE", help="merge route edits downloaded from the app into "
+                    "tools/route_edits.json, then rebuild the maps they touch")
     args = ap.parse_args()
     _, maps = load_maps()
     spec = json.loads(SPEC.read_text())
-    done = load_routes() if args.map else {}
+    edits = json.loads(EDITS.read_text()) if EDITS.exists() else {}
+    only = {args.map} if args.map else None
+    if args.apply:
+        new = json.loads(pathlib.Path(args.apply).read_text())
+        new = new.get("routeEdits", new)       # the app's download wraps them
+        for mid, sides in new.items():
+            for side, targets in sides.items():
+                for to, fix in targets.items():
+                    cur = edits.setdefault(mid, {}).setdefault(side, {})
+                    if fix is None:            # null removes a hand fix
+                        cur.pop(to, None)
+                    else:
+                        cur[to] = {k: fix[k] for k in ("from", "via") if fix.get(k) is not None}
+                    print(f"{mid}: {side} -> {to} {'reset' if fix is None else 'set by hand'}")
+        edits = {mid: {sd: t for sd, t in sides.items() if t} for mid, sides in edits.items()}
+        edits = {mid: sides for mid, sides in edits.items() if sides}
+        EDITS.write_text(fmt_edits(edits))
+        only = (only or set()) | set(new)
+    done = load_routes() if only else {}
     report = []
     for m in maps:
-        if args.map and m["id"] != args.map:
+        if only and m["id"] not in only:
             continue
         if m["id"] not in spec:
             report.append(f"{m['id']}: not in routes.json")
             continue
-        data, levels = build_map(m, spec[m["id"]], report)
+        data, levels = build_map(m, spec[m["id"]], report, edits.get(m["id"]))
         done[m["id"]] = data
         times = ", ".join(f"{r['id']} {r['time']}" for r in data["routes"])
         print(f"{m['id']}: {len(data['routes'])} routes  ({times})")

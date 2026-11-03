@@ -24,7 +24,7 @@
       "T": ["top-mid", "mid-doors", "catwalk", "outside-long", "long-doors", "upper-b-tunnels", "lower-b-tunnels"],
       "CT": ["long-doors", "blue", "a-cross",
              {"to": "a-short", "_why": "Like A Cross, then 3 jumps up the Short Boost boxes (2 to peek, 3 to stand on Short).",
-              "via": [[739, 200], {"jump": [[724, 199], [700, 200], [674, 203], [662, 268]], "s": 1.5}]},
+              "via": [[739, 200], {"jump": [[724, 199, 0.5], [700, 200, 0.5], [674, 203, 0.5], [662, 268]]}]},
              "ct-mid", "close-mid-doors", "b-doors", "b-window"]
     }
   },
