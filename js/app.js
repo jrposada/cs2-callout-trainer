@@ -309,11 +309,15 @@
   // Smooth zoom and pan (van Wijk & Nuij 2003, as in d3.interpolateZoom): a long move zooms out, travels
   // and zooms back in, and a zoom with no pan just scales. It runs on the visible area (centre and width
   // on screen), since the svg letterboxes the viewBox, then lands on the exact target viewBox.
+  // Speed along the path is a cubic with start slope m that never overshoots for m in [0, 3]: m = 3 is
+  // ease-out (short zooms move on the press), m = 0.75 is close to Material's standard curve (long flights).
   const RHO = Math.SQRT2, REDUCE_MOTION = matchMedia("(prefers-reduced-motion: reduce)");
+  const ease = (t, m) => t * (m + t * ((3 - 2 * m) + t * (m - 2)));
+  const dease = (t, m) => m + t * (2 * (3 - 2 * m) + 3 * t * (m - 2));
   let viewAnim = null;
   function stopView() { if (viewAnim) { cancelAnimationFrame(viewAnim.raf); viewAnim = null; } }
   function goView(v) {
-    const to = clampView(v), r = svg.getBoundingClientRect();
+    const to = clampView(v), r = svg.getBoundingClientRect(), prev = viewAnim, now0 = performance.now();
     stopView();
     if (REDUCE_MOTION.matches || !r.width || !r.height) return applyView(to);
     const from = state.view;
@@ -340,16 +344,27 @@
     }
     const len = Math.abs(S);
     if (!isFinite(len) || len < 1e-3) return applyView(to);
-    const ms = Math.min(220 + 260 * len, 800), t0 = performance.now(), aspect = r.height / r.width;
-    const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+    const zoomOnly = d1 < 1e-6 * w0;
+    const ms = Math.min(180 + 300 * len, 700), aspect = r.height / r.width;
+    // A press during a flight carries its speed over, so repeated zooms keep pace instead of stuttering.
+    // Reversing a zoom (in, then out) starts fresh.
+    let carried = 0;
+    if (prev && prev.t0 != null && !(prev.zoomOnly && zoomOnly && Math.sign(prev.S) !== Math.sign(S))) {
+      const t = Math.min(Math.max((now0 - prev.t0) / prev.ms, 0), 1);
+      carried = (dease(t, prev.m) * prev.len) / prev.ms;
+    }
+    const m = Math.min(3, Math.max(len < 0.4 ? 3 : 0.75, (carried * ms) / len));
+    // The clock starts on the first frame, counted as one frame in so the view moves at once. (A rAF
+    // timestamp can predate the click, and a negative t would step ease-out backwards.)
     const step = (now) => {
-      const t = Math.min((now - t0) / ms, 1);
+      if (viewAnim.t0 == null) viewAnim.t0 = now - 1000 / 60;
+      const t = Math.min(Math.max((now - viewAnim.t0) / ms, 0), 1);
       if (t >= 1) { viewAnim = null; return applyView(to); }
-      const [cx, cy, w] = at(ease(t)), h = w * aspect;
+      const [cx, cy, w] = at(ease(t, m)), h = w * aspect;
       applyView([cx - w / 2, cy - h / 2, w, h]);
       viewAnim.raf = requestAnimationFrame(step);
     };
-    viewAnim = { to, raf: requestAnimationFrame(step) };
+    viewAnim = { to, t0: null, ms, len, m, S, zoomOnly, raf: requestAnimationFrame(step) };
   }
   function zoomAt(factor, cx, cy) {
     const [x, y, w, h] = state.view;
