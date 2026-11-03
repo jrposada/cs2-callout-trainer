@@ -37,6 +37,9 @@
 /* The selected line-up, picked from the list or the radar: tinted and barred in its side's colour, like its arc. */
 .smk-list button.is-active { background: var(--t-gold-soft); box-shadow: inset 3px 0 0 var(--t-gold); }
 .smk-list button.is-active.side-ct { background: var(--ct-blue-soft); box-shadow: inset 3px 0 0 var(--ct-dot); }
+/* Line-ups of the landing spot focused on the radar, before one is picked: the bar alone. */
+.smk-list button.is-focus { box-shadow: inset 3px 0 0 var(--t-gold); }
+.smk-list button.is-focus.side-ct { box-shadow: inset 3px 0 0 var(--ct-dot); }
 .smk-list .sd { flex: none; width: 22px; font: 700 13px/1 var(--display); color: var(--t-gold); }
 .smk-list .side-ct .sd { color: var(--ct-dot); }
 .smk-list .nm { flex: none; font: 600 17px/1.2 var(--display); }
