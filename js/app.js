@@ -29,7 +29,16 @@
     }
     if (moved) store.set(K.progress, progress);
   })();
-  const prefs = Object.assign({ map: BASE[0] && BASE[0].id, mode: "explore", labels: false, round: 10 }, store.get(K.prefs, {}));
+  const prefs = Object.assign({ map: BASE[0] && BASE[0].id, content: "callouts", mode: "explore", labels: false, round: 10 }, store.get(K.prefs, {}));
+  // The panel picks what you learn (content) and how (a learning mode, shared by both contents).
+  // prefs.mode only ever holds a learning mode: older saves could hold "smokes" (now Smokes · Explore),
+  // or a tool ("live", "edit"), which is never restored from prefs, only from the hash.
+  const LEARN = ["explore", "name", "find"];
+  const LEARN_NAME = { explore: "Explore", name: "Name it", find: "Find it" };
+  const TOOLS = ["live", "edit"];
+  if (prefs.mode === "smokes") { prefs.content = "smokes"; prefs.mode = "explore"; }
+  if (!LEARN.includes(prefs.mode)) prefs.mode = "explore";
+  if (prefs.content !== "smokes") prefs.content = "callouts";
 
   // Maps with the user's local position edits applied.
   function buildMaps() {
@@ -59,7 +68,6 @@
   // rescale, busy, and optionally click(p), escape() -> handled?, route(arg), hashArg() -> string, zones }.
   const EXT = window.CCT_MODES || {};
   const ext = () => EXT[state.mode] || null;
-  const MODES = ["explore", "find", "name", "edit", ...Object.keys(EXT)];
   const extLeave = () => { for (const k in EXT) if (EXT[k].leave) EXT[k].leave(); };
 
   // ---------- dom ----------
@@ -77,6 +85,10 @@
   const state = {
     map: null,
     level: "upper",
+    content: "callouts", // what you learn: "callouts" | "smokes"
+    learn: "explore",    // how: "explore" | "name" | "find", shared by both contents
+    tool: null,          // null | "live" | "edit", shown instead of the learning view
+    // The view on screen, worked out by go(): the tool, "smokes", or the callout learning mode.
     mode: "explore",
     view: [0, 0, 1024, 1024],
     selected: null,
@@ -692,36 +704,118 @@
     clearFeedback();
     setLevel("upper", true);
     renderMapList();
-    if (!keepMode) setMode(state.mode); else { renderMarkers(); renderPanel(); }
+    if (!keepMode) go({ tool: state.tool }, true); else { renderMarkers(); renderPanel(); }
     updateHash();
     const cur = $("#mapList .map-btn[aria-current='true']");
     if (cur) cur.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
 
-  // ---------- modes ----------
-  function setMode(mode) {
+  // ---------- navigation: content × learning mode, plus the tools ----------
+  // next: any of { content, learn, tool }; what it leaves out stays, except tool, which closes.
+  // Edit only works on callouts. Switching content drops the selection and the search; map, level and zoom stay.
+  function go(next, quiet) {
+    const t = { content: state.content, learn: state.learn, tool: null, ...next };
+    if (t.tool === "edit") t.content = "callouts";
+    const f = document.activeElement;
+    const fromNav = !!f && !!f.closest && !!f.closest(".panel-nav, .edit-link");
     extLeave();
-    state.mode = mode;
+    if (t.content !== state.content) { state.selected = null; state.search = ""; state.vertex = null; }
+    state.content = t.content;
+    state.learn = t.learn;
+    state.tool = t.tool;
+    state.mode = t.tool || (t.content === "smokes" ? "smokes" : t.learn);
     state.quiz = null;
-    prefs.mode = mode;
+    prefs.content = t.content;
+    prefs.mode = t.learn;
     store.set(K.prefs, prefs);
-    document.body.className = "mode-" + mode;
-    document.querySelectorAll(".modes button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
+    document.body.className = t.tool ? "mode-" + t.tool : `content-${t.content} mode-${t.learn}`;
+    syncNav();
     clearFeedback();
     renderMarkers();
     renderPanel();
     updateHash();
+    // Focus stays on the control that switched; if it is gone (Done, the Edit link), it lands on the nearest one.
+    if (fromNav) {
+      const to = f.isConnected && f.offsetParent ? f : state.tool ? $("[data-tool-done]") : $("#tab-" + state.learn);
+      to.focus({ preventScroll: true });
+    }
+    if (!quiet) announce(navName());
   }
-  document.querySelectorAll(".modes button").forEach((b) => (b.onclick = () => {
-    const mode = b.dataset.mode;
-    if (mode !== state.mode && canLeave("mode:" + mode)) setMode(mode);
+  const navName = () => state.tool === "live" ? "Live round clock"
+    : state.tool === "edit" ? `Editing ${state.map.name} zones`
+    : `${state.content === "smokes" ? "Smokes" : "Callouts"} · ${LEARN_NAME[state.learn]}`;
+
+  // Pressed content, selected tab, the "soon" tag on smokes Name it, the tool head and the panel's role.
+  function syncNav() {
+    const tool = state.tool;
+    document.querySelectorAll(".content-seg button").forEach((b) => {
+      const on = b.dataset.content === state.content;
+      b.setAttribute("aria-pressed", String(on && !tool));
+      b.tabIndex = on ? 0 : -1;
+    });
+    $(".nav-tool[data-tool='live']").setAttribute("aria-pressed", String(tool === "live"));
+    $(".modes").hidden = !!tool;
+    document.querySelectorAll(".modes [role='tab']").forEach((b) => {
+      const on = b.dataset.mode === state.learn;
+      b.setAttribute("aria-selected", String(on));
+      b.tabIndex = on ? 0 : -1;
+    });
+    const nameTab = $("#tab-name"), soon = state.content === "smokes", tag = nameTab.querySelector(".soon");
+    nameTab.toggleAttribute("data-soon", soon);
+    if (soon) {
+      nameTab.setAttribute("aria-label", "Name it, coming soon for smokes");
+      if (!tag) nameTab.insertAdjacentHTML("beforeend", `<span class="soon" aria-hidden="true">soon</span>`);
+    } else {
+      nameTab.removeAttribute("aria-label");
+      if (tag) tag.remove();
+    }
+    $(".tool-head").hidden = !tool;
+    if (tool) {
+      $(".tool-title").textContent = navName();
+      panel.setAttribute("role", "region");
+      panel.setAttribute("aria-label", tool === "live" ? "Live" : "Edit zones");
+      panel.removeAttribute("aria-labelledby");
+    } else {
+      panel.setAttribute("role", "tabpanel");
+      panel.removeAttribute("aria-label");
+      panel.setAttribute("aria-labelledby", "tab-" + state.learn);
+    }
+  }
+
+  // Every switch asks canLeave first, so an answered round (or a running Live clock) needs a second click.
+  document.querySelectorAll(".content-seg button").forEach((b) => (b.onclick = () => {
+    const c = b.dataset.content;
+    if ((c !== state.content || state.tool) && canLeave("content:" + c)) go({ content: c });
+  }));
+  document.querySelectorAll(".modes [role='tab']").forEach((b) => (b.onclick = () => {
+    const m = b.dataset.mode;
+    if (m !== state.learn && canLeave("mode:" + m)) go({ learn: m });
+  }));
+  $(".nav-tool[data-tool='live']").onclick = () => {
+    if (canLeave("tool:live")) go({ tool: state.tool === "live" ? null : "live" });
+  };
+  $("[data-tool-done]").onclick = () => { if (canLeave("tool:done")) go({}); };
+  // The Edit zones link lives in the (re-rendered) panel footer.
+  panel.addEventListener("click", (e) => {
+    const b = e.target.closest && e.target.closest(".edit-link");
+    if (b && state.tool !== "edit" && canLeave("tool:edit")) go({ tool: "edit" });
+  });
+  // Each row is one Tab stop: arrows, Home and End move focus inside it; Enter or Space switches.
+  document.querySelectorAll(".content-seg, .modes").forEach((row) => row.addEventListener("keydown", (e) => {
+    const bs = [...row.querySelectorAll("button")], i = bs.indexOf(document.activeElement), n = bs.length;
+    if (i < 0) return;
+    const j = { ArrowRight: (i + 1) % n, ArrowLeft: (i - 1 + n) % n, Home: 0, End: n - 1 }[e.key];
+    if (j == null) return;
+    e.preventDefault();
+    bs[j].focus();
   }));
 
   function updateHash() {
     if (!state.map) return;
-    // An extra mode can add a third segment, e.g. #mirage/smokes/<line-up id>.
+    // #mirage/find, #mirage/smokes/find, #mirage/live. Smokes Explore can add a line-up id.
     const x = ext(), arg = x && x.hashArg ? x.hashArg() : "";
-    const h = `#${state.map.id}/${state.mode}${arg ? "/" + arg : ""}`;
+    const path = state.tool || (state.content === "smokes" ? "smokes/" + state.learn : state.learn);
+    const h = `#${state.map.id}/${path}${arg ? "/" + arg : ""}`;
     if (location.hash !== h) history.replaceState(null, "", h);
   }
 
@@ -731,7 +825,6 @@
     document.body.classList.toggle("quiz-step", step);
     document.body.classList.toggle("quiz-answered", step && q.answered);
     syncLevelButtons();
-    syncEditBadge();
     $("#stagePrompt").textContent = "";
     $("#stagePrompt").classList.remove("is-find");
     if (state.mode === "explore") return renderExplore();
@@ -740,17 +833,16 @@
     return renderQuiz();
   }
 
-  // Local edits change quiz answers, so the Edit tab shows how many the current map has.
+  // Local edits change quiz answers, so the Edit zones link shows how many the current map has.
   function editCount(m) { return edits[m.id] ? Object.keys(edits[m.id]).length : 0; }
-  function syncEditBadge() {
-    const b = $(".modes button[data-mode='edit']"), n = editCount(state.map);
-    b.textContent = n ? `Edit · ${n}` : "Edit";
-    if (n) b.setAttribute("aria-label", `Edit, ${n} local zone edit${n === 1 ? "" : "s"} on ${state.map.name}`);
-    else b.removeAttribute("aria-label");
-  }
 
+  // Callout views only. The footer's last sentence is the way into Edit (left out in Edit itself).
   function footer() {
-    return `<div class="foot">Callout names follow <a href="https://totalcsgo.com/callouts" target="_blank" rel="noopener">Total CS</a>. Radar images come from the CS2 game files. Zones were generated from the radar and placed by hand; if one is off, fix it in Edit.</div>`;
+    const n = editCount(state.map);
+    const link = state.mode === "edit" ? "."
+      : `; if one is off, fix it in <button type="button" class="link-btn edit-link${n ? " has-edits" : ""}" data-tool="edit"${
+        n ? ` aria-label="Edit zones, ${n} local edit${n === 1 ? "" : "s"} on ${esc(state.map.name)}"` : ""}>${n ? `Edit zones · ${n}` : "Edit zones"}</button>.`;
+    return `<div class="foot">Callout names follow <a href="https://totalcsgo.com/callouts" target="_blank" rel="noopener">Total CS</a>. Radar images come from the CS2 game files. Zones were generated from the radar and placed by hand${link}</div>`;
   }
 
   function matches(c, q) {
@@ -1416,6 +1508,8 @@
   const api = {
     state, prefs, panel, svg, $, el, esc, toast, unit, levelName, ensureVisible, NARROW, TOUCH, MASTER_STREAK,
     centerOn, fitView, setView, fitBox, clientToSvg, announce, canLeave, updateHash,
+    // Switch content, learning mode or tool (see go()); extra modes use it for their own "go to" buttons.
+    go: (next) => go(next),
     // Game units to radar px on the current map, and radar px to whole metres.
     unitsToPx: (u) => u / state.map.scale,
     meters,
@@ -1424,35 +1518,52 @@
     callout: (id) => state.map.callouts.find((c) => c.id === id),
   };
   for (const k in EXT) if (EXT[k].init) EXT[k].init(api);
+  // A hash as { map, content, learn, tool, arg }, with null for what it doesn't say.
+  // Old links: #mirage/smokes is Smokes · Explore, and #mirage/smokes/<id> opens that line-up there.
+  function parseHash() {
+    const [hMap, a, b, ...rest] = location.hash.replace(/^#/, "").split("/");
+    const h = { map: MAPS.some((m) => m.id === hMap) ? hMap : null, content: null, learn: null, tool: null, arg: "" };
+    if (LEARN.includes(a)) { h.content = "callouts"; h.learn = a; }
+    else if (TOOLS.includes(a)) h.tool = a;
+    else if (a === "smokes") {
+      h.content = "smokes";
+      if (LEARN.includes(b)) { h.learn = b; if (b === "explore") h.arg = rest.join("/"); }
+      else { h.learn = "explore"; h.arg = b || ""; }
+    }
+    return h;
+  }
   function boot() {
     if (!MAPS.length) { panel.textContent = "No map data found. Check that data/maps.js loads."; return; }
-    const [hMap, hMode, ...rest] = location.hash.replace(/^#/, "").split("/");
-    state.mode = MODES.includes(hMode) ? hMode : MODES.includes(prefs.mode) ? prefs.mode : "explore";
-    selectMap(MAPS.some((m) => m.id === hMap) ? hMap : prefs.map);
-    routeExt(hMode === state.mode ? rest.join("/") : "");
+    const h = parseHash();
+    state.content = h.content || prefs.content;
+    state.learn = h.learn || prefs.mode;
+    state.tool = h.tool;
+    selectMap(h.map || prefs.map);
+    routeExt(h.arg);
   }
-  // Hand the hash's third segment to an extra mode that takes one, then write the hash it settles on.
+  // Hand a line-up id to Smokes · Explore, then write the hash it settles on.
   function routeExt(arg) {
     const x = ext();
-    if (!x || !x.route) return;
-    let a = arg || "";
-    try { a = decodeURIComponent(a); } catch { /* keep it raw */ }
-    x.route(a);
+    if (x && x.route && state.learn === "explore") {
+      let a = arg || "";
+      try { a = decodeURIComponent(a); } catch { /* keep it raw */ }
+      x.route(a);
+    }
     updateHash();
   }
   window.addEventListener("hashchange", () => {
-    const [hMap, hMode, ...rest] = location.hash.replace(/^#/, "").split("/");
-    const arg = rest.join("/");
-    const newMap = state.map && hMap && hMap !== state.map.id && MAPS.some((m) => m.id === hMap);
-    const newMode = hMode && hMode !== state.mode && MODES.includes(hMode);
-    // Same map and mode, but a new third segment (a hand-edited line-up id, say).
+    const h = parseHash();
+    const t = h.tool ? { tool: h.tool } : h.content ? { content: h.content, learn: h.learn } : null;
+    const newMap = !!state.map && !!h.map && h.map !== state.map.id;
+    const newView = !!t && (t.tool ? t.tool !== state.tool : !!state.tool || t.content !== state.content || t.learn !== state.learn);
+    // Same map and view, but a new line-up id (a hand-edited link, say).
     const x = ext();
-    const newArg = !newMap && !newMode && hMode === state.mode && !!x && !!x.route && arg !== (x.hashArg ? x.hashArg() || "" : "");
-    if (!newMap && !newMode && !newArg) return;
+    const newArg = !newMap && !newView && !!x && !!x.route && state.learn === "explore" && h.arg !== (x.hashArg ? x.hashArg() || "" : "");
+    if (!newMap && !newView && !newArg) return updateHash(); // an old or odd spelling of where we already are
     if (!canLeave("hash:" + location.hash)) return updateHash(); // restore the hash of the round we kept
-    if (newMap) selectMap(hMap);
-    if (newMode) setMode(hMode);
-    routeExt(arg);
+    if (newMap) selectMap(h.map);
+    if (newView) go(t);
+    routeExt(h.arg);
   });
   boot();
 })();

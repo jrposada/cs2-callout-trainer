@@ -1,8 +1,9 @@
-// Smokes mode: well-known smoke line-ups on the radar. Browse them by side and target, pick a landing
-// spot to see where it is thrown from, and pick a throw spot for how to throw it. Drill asks where you
-// stand to throw a smoke (scored by distance), then which throw it is (a bonus, not scored).
+// Smokes content: well-known smoke line-ups on the radar. The app's learning mode picks the view.
+// Explore filters them by side and target: pick a landing spot to see where it is thrown from, and a
+// throw spot for how to throw it. Find it asks where you stand to throw a smoke (scored by distance),
+// then which throw it is (a bonus, not scored). Name it is a placeholder for now.
 // Each line-up can have two in-game screenshots (where to stand, where to aim), shown on its card,
-// in the drill reveal and in a lightbox.
+// in the Find it reveal and in a lightbox.
 // Line-ups come from data/smokes.js (window.CALLOUT_SMOKES). Like js/live.js, this file loads before
 // js/app.js, registers itself in window.CCT_MODES, and gets the app's helpers through init(api).
 (() => {
@@ -59,9 +60,10 @@
     focus: null,       // landing callout id whose throws are shown
     sel: null,         // selected line-up id
     drawnFocus: null,  // the focus whose arcs last drew in
-    view: "browse",    // "browse" | "drill"
-    round: null,       // the drill round, see startRound()
+    round: null,       // the Find it round, see startRound()
   };
+  // The view follows the app's shared learning mode: "explore" | "find" | "name".
+  const view = () => A.state.learn;
 
   // ---------- drill progress (its own key, apart from the callout progress) ----------
   let prog = (() => {
@@ -85,7 +87,7 @@
   function masteryText(id) {
     const r = recOf(id), st = stage(id);
     const now = st === "new" ? "not drilled yet" : st === "learned" ? "learned" : `learning, ${r.k} of ${A.MASTER_STREAK} in a row`;
-    return `Drill: <span class="status">${now}.</span>${r && r.s ? ` <span class="lifetime">${r.c} of ${r.s} right overall.</span>` : ""}`;
+    return `Find it: <span class="status">${now}.</span>${r && r.s ? ` <span class="lifetime">${r.c} of ${r.s} right overall.</span>` : ""}`;
   }
 
   // ---------- data ----------
@@ -143,7 +145,7 @@
     return out.sort((x, y) => so[x.site] - so[y.site] || (x.side === y.side ? 0 : x.side === "t" ? -1 : 1) || x.name.localeCompare(y.name));
   }
   const side = () => (SIDES.some((s) => s[0] === A.prefs.smkSide) ? A.prefs.smkSide : "both");
-  // Target filter (A, Mid, B; empty = every site), shared by Browse and Drill and remembered like the side.
+  // Target filter (A, Mid, B; empty = every site), shared by Explore and Find it and remembered like the side.
   const sites = () => new Set((Array.isArray(A.prefs.smkSites) ? A.prefs.smkSites : []).filter((s) => SITE_NAME[s]));
   function setSites(set) {
     A.prefs.smkSites = SITES.map(([s]) => s).filter((s) => set.has(s));
@@ -275,18 +277,15 @@
     }
   }
   // One state back: selected -> focused -> idle. False when there is nothing to undo.
+  // Esc never switches content or mode, so Find it and Name it have nothing to step back from.
   function back() {
-    if (S.view === "drill") {
-      // Mid-round Esc skips the "Which throw?" bonus and otherwise does nothing (End round is the way out);
-      // the intro and the summary go back to Browse.
-      if (S.round && !S.round.done) {
-        if (S.round.phase !== "reveal") return false;
-        skipThrow();
-        return true;
-      }
-      setView("browse");
-      return true;
+    if (view() === "find") {
+      // Mid-round Esc skips the "Which throw?" bonus and otherwise does nothing (End round is the way out).
+      const q = S.round;
+      if (q && !q.done && q.phase === "reveal") { skipThrow(); return true; }
+      return false;
     }
+    if (view() !== "explore") return false;
     if (S.sel) {
       S.sel = null;
       render();
@@ -315,7 +314,8 @@
 
   // Map clicks: a throw spot of the focused target, then a landing, else one step back.
   function click(p) {
-    if (S.view === "drill") { const q = S.round; if (q && !q.done && q.phase === "ask") answer(p); return; }
+    if (view() === "find") { const q = S.round; if (q && !q.done && q.phase === "ask") answer(p); return; }
+    if (view() !== "explore") return;
     const u = A.unit(), lv = A.state.level, list = filtered();
     let best = null, bd = Infinity;
     if (S.focus) {
@@ -493,7 +493,7 @@
         <span class="nm">${esc(l.name)}</span>
         <span class="from">from ${esc(l.from.name)}</span>
         <span class="tq${isMove(t) ? " is-move" : ""}">${techLabel(t)}</span>
-        <span class="ms" title="Drill: ${stage(l.id)}"><i style="width:${mastery(l.id) * 100}%"></i></span>
+        <span class="ms" title="Find it: ${stage(l.id)}"><i style="width:${mastery(l.id) * 100}%"></i></span>
         ${l.status !== "checked" ? `<span class="unv" title="Approximate, not checked in game" aria-hidden="true">◌</span><span class="sr-only">, approximate</span>` : ""}
       </button></li>`;
   }
@@ -504,7 +504,7 @@
     const D = window.CALLOUT_SMOKES;
     const others = (window.CALLOUT_MAPS || []).map((x) => [x, rawFor(x.id).length]).filter(([x, n]) => n && x.id !== m.id);
     const msg = !D ? `The line-ups did not load. They come from <code>data/smokes.js</code>.`
-      : `No smokes for ${esc(m.name)} yet.${others.map(([x, n]) => ` <a href="#${x.id}/smokes">${esc(x.name)} has ${n}.</a>`).join("")}`;
+      : `No smokes for ${esc(m.name)} yet.${others.map(([x, n]) => ` <a href="#${x.id}/smokes/explore">${esc(x.name)} has ${n}.</a>`).join("")}`;
     A.panel.innerHTML = `
       <p class="lede"><strong>Smokes</strong> shows where to stand and how to throw well-known smokes, on the radar you already know.</p>
       <div class="card smk-empty"><p class="desc">${msg}</p></div>`;
@@ -522,30 +522,37 @@
     return ".smk-list button[data-id]";
   }
 
-  const viewSeg = () => seg("smkView", [["browse", "Browse"], ["drill", "Drill"]], S.view, "Smokes view");
-  function setView(v) {
-    if (v === S.view) return;
-    if (busy() && !A.canLeave("smkview:" + v)) return;
-    S.view = v;
-    S.round = null;
-    S.sel = S.focus = null;
-    A.fitView();
-    render();
-    A.updateHash();
-    const b = A.panel.querySelector(`#smkView button[data-v="${v}"]`);
-    if (b) b.focus({ preventScroll: true });
+  // Switch the app to another learning mode from a button in the panel, keeping focus near it.
+  function goMode(m) {
+    A.go({ learn: m });
+    const t = A.$("#tab-" + m);
+    if (t) t.focus({ preventScroll: true });
   }
 
   function render() {
     layer.style.display = "";
     const every = all();
-    const active = S.view === "drill" && !!S.round && !S.round.done;
+    const active = view() === "find" && !!S.round && !S.round.done;
     document.body.classList.toggle("quiz-step", active);
     document.body.classList.toggle("quiz-answered", active && S.round.phase !== "ask");
     document.body.classList.toggle("smk-picked", active && S.round.phase === "picked");
     if (!every.length) { S.sel = S.focus = null; S.round = null; document.body.classList.remove("quiz-step", "quiz-answered", "smk-picked"); return renderEmpty(); }
-    if (S.view === "drill") return renderDrill(every);
+    if (view() === "find") return renderDrill(every);
+    if (view() === "name") return renderNameIt();
     renderBrowse(every);
+  }
+  // Name it for smokes is not built yet: say what it will be and point to the two views that work.
+  function renderNameIt() {
+    layer.textContent = "";
+    A.$("#stagePrompt").textContent = "";
+    A.panel.innerHTML = `
+      <p class="lede"><strong>Name it for smokes is coming:</strong> you'll see where you stand and name the smoke. For now, learn line-ups in Explore and test them in Find it.</p>
+      <div class="row">
+        <button type="button" class="btn primary" id="smkGoFind">Go to Find it</button>
+        <button type="button" class="btn" id="smkGoExplore">Explore</button>
+      </div>`;
+    A.$("#smkGoFind").onclick = () => goMode("find");
+    A.$("#smkGoExplore").onclick = () => goMode("explore");
   }
   function renderBrowse(every) {
     const m = A.state.map;
@@ -557,7 +564,6 @@
     const groups = SITES.map(([s]) => [s, list.filter((l) => l.site === s)]).filter(([, ls]) => ls.length);
     const n = list.length, total = every.length;
     A.panel.innerHTML = `
-      ${viewSeg()}
       <p class="lede">${n === total ? `${total} smoke${total === 1 ? "" : "s"}` : `${n} of ${total} smokes`} on ${esc(m.name)}. ${n ? "Tap a landing spot to see where it's thrown from." : "None match these filters."}</p>
       <div class="row smk-ctrl"><span class="field-label">Side</span>${seg("smkSide", SIDES, side(), "Side")}</div>
       ${targetRow()}
@@ -570,7 +576,6 @@
     // On narrow screens the panel sits below the map, so echo the selection on the stage.
     A.$("#stagePrompt").innerHTML = sel ? `${esc(sel.name)}<span class="sp-desc">Aim: ${esc(sel.aim)}</span>` : "";
     bindSeg("smkSide", setSide);
-    bindSeg("smkView", setView);
     bindTargets();
     A.$("#smkList").onclick = (e) => {
       const b = e.target.closest("button[data-id]");
@@ -763,7 +768,6 @@
     const seen = prog[m.id] && Object.keys(prog[m.id]).length;
     const size = Math.min(ROUND_MAX, pool.length);
     A.panel.innerHTML = `
-      ${viewSeg()}
       <p class="lede">You get a smoke and where it lands. <strong>Click where you stand to throw it.</strong> Within ${Math.round(HIT_U * 0.0254 * 10) / 10} m is a hit; within ${Math.round(CLOSE_U * 0.0254)} m is close. Then pick the throw, for a bonus that doesn't touch your streak.</p>
       <p class="lede smk-approx"><span class="acc">◌ Approximate</span> These line-ups are approximate and not yet checked in game.</p>
       <div class="row smk-ctrl"><span class="field-label">Side</span>${seg("smkSide", SIDES, side(), "Side")}</div>
@@ -774,13 +778,12 @@
         <p class="lede">A line-up counts as learned after ${A.MASTER_STREAK} hits in a row. New and learning line-ups come first.</p>
         ${seen ? `<button type="button" class="link-btn" id="smkReset">Reset ${esc(m.name)} smokes</button>` : ""}
       </div>`;
-    bindSeg("smkView", setView);
     bindSeg("smkSide", setSide);
     bindTargets();
     A.$("#smkStart").onclick = startRound;
     const rs = A.$("#smkReset");
     if (rs) rs.onclick = () => {
-      if (!confirm(`Reset your ${m.name} smoke drill progress? Every ${m.name} line-up goes back to new. Callout progress in Find it and Name it is not touched.`)) return;
+      if (!confirm(`Reset your ${m.name} smokes progress in Find it? Every ${m.name} line-up goes back to new. Callout progress in Find it and Name it is not touched.`)) return;
       delete prog[m.id];
       saveProg();
       render();
@@ -801,32 +804,29 @@
     const pool = all().filter((l) => q.pool.includes(l.id));
     const learned = pool.filter((l) => stage(l.id) === "learned").length, gain = learned - q.learned0;
     A.panel.innerHTML = `
-      ${viewSeg()}
       ${drillProgress()}
       <div>
         <div class="score-big">${hits}<small> / ${total}</small></div>
         <p class="gain">Throw technique: ${rightThrows} of ${picks.length} right${skips ? `, ${skips} skipped` : ""}.</p>
         <p class="gain">${esc(m.name)} smokes: ${q.learned0} → ${learned} learned <span class="${gain > 0 ? "up" : ""}">(${gain > 0 ? "+" : gain < 0 ? "−" : "±"}${Math.abs(gain)})</span></p>
-        <p class="lede">${missed.length ? `${missed.length} to work on, shown on the radar. Pick one to see it in Browse.` : "Clean round. Every throw spot within a hit."}</p>
+        <p class="lede">${missed.length ? `${missed.length} to work on, shown on the radar. Pick one to see it in Explore.` : "Clean round. Every throw spot within a hit."}</p>
       </div>
       ${missed.length ? `<ul class="missed">${missed.map((l) => `<li><button type="button" data-id="${esc(l.id)}"><b>${esc(l.name)}</b> from ${esc(l.from.name)}</button></li>`).join("")}</ul>` : ""}
       <div class="row">
         <button type="button" class="btn primary" id="smkAgain">Again</button>
-        <button type="button" class="btn" id="smkBrowse">Back to Browse</button>
+        <button type="button" class="btn" id="smkBrowse">Back to Explore</button>
       </div>`;
-    bindSeg("smkView", setView);
     const ml = A.panel.querySelector(".missed");
     if (ml) ml.onclick = (e) => {
       const b = e.target.closest("button[data-id]");
       if (!b) return;
-      S.view = "browse";
-      S.round = null;
+      A.go({ learn: "explore" });
       select(b.dataset.id, "route");
       const row = A.panel.querySelector(`.smk-list button[data-id="${CSS.escape(b.dataset.id)}"]`);
       if (row) row.focus({ preventScroll: true });
     };
     A.$("#smkAgain").onclick = startRound;
-    A.$("#smkBrowse").onclick = () => setView("browse");
+    A.$("#smkBrowse").onclick = () => goMode("explore");
     drawSummary(missed);
   }
 
@@ -875,35 +875,35 @@
     rescale(A.unit());
   }
   // A round with at least one answer asks before it is thrown away (like the Find it quiz).
-  const busy = () => !!A && A.state.mode === "smokes" && S.view === "drill" && !!S.round && !S.round.done && S.round.results.length > 0;
+  const busy = () => !!A && A.state.mode === "smokes" && view() === "find" && !!S.round && !S.round.done && S.round.results.length > 0;
 
   // ---------- keyboard ----------
   document.addEventListener("keydown", (e) => {
     if (!A || A.state.mode !== "smokes" || e.ctrlKey || e.metaKey || e.altKey) return;
     const t = e.target;
     if (t && (t.isContentEditable || (t.matches && t.matches("input, textarea, select")))) return;
-    if (!all().length) return;
-    const q = S.view === "drill" ? S.round : null;
+    if (!all().length || view() === "name") return;
+    const q = view() === "find" ? S.round : null;
     if (q && !q.done) {
       if (q.phase === "reveal" && /^[1-6]$/.test(e.key)) { e.preventDefault(); pickThrow(Number(e.key) - 1); return; }
       // A focused button clicks itself on Enter, so leave that to the button.
       if (q.phase === "picked" && e.key === "Enter" && !(t && t.matches && t.matches("button, a"))) { e.preventDefault(); nextQuestion(); }
       return; // no side keys while a round is running
     }
-    if (S.view === "browse" && (e.key === "[" || e.key === "]")) { e.preventDefault(); step(e.key === "]" ? 1 : -1); return; }
+    if (view() === "explore" && (e.key === "[" || e.key === "]")) { e.preventDefault(); step(e.key === "]" ? 1 : -1); return; }
     const k = e.key.toLowerCase();
     const v = k === "t" ? "t" : k === "c" ? "ct" : k === "b" ? "both" : null;
     if (v) { e.preventDefault(); setSide(v); }
   });
 
   // ---------- registration ----------
-  // Add the tab after the others, copying a sibling's attributes (see js/live.js).
-  const tabs = document.querySelector(".modes");
-  if (tabs && tabs.lastElementChild && !tabs.querySelector('[data-mode="smokes"]')) {
-    const b = tabs.lastElementChild.cloneNode(false);
-    b.dataset.mode = "smokes";
-    b.textContent = "Smokes";
-    tabs.appendChild(b);
+  // Line-up ids share the hash with the mode names (#mirage/smokes/explore/<id>), so those are reserved.
+  const RESERVED = ["explore", "name", "find"];
+  const D0 = window.CALLOUT_SMOKES || {};
+  for (const mapId in D0) {
+    for (const r of Array.isArray(D0[mapId]) ? D0[mapId] : []) {
+      if (r && RESERVED.includes(r.id)) console.warn(`Smokes: line-up ${mapId}/${r.id} uses a reserved id (${RESERVED.join(", ")}); rename it.`);
+    }
   }
   window.CCT_MODES = window.CCT_MODES || {};
   window.CCT_MODES.smokes = {
@@ -918,25 +918,23 @@
     rescale,
     click,
     escape: back,
-    // #<map>/smokes/<id> selects that line-up; anything else (or nothing) is plain Browse.
+    // In Explore, #<map>/smokes/explore/<id> selects that line-up; anything else (or nothing) shows them all.
     route(arg) {
       closeLightbox(false);
       const l = arg && all().find((x) => x.id === arg);
-      if (!l) { if (S.view === "browse" && (S.sel || S.focus)) { S.sel = S.focus = null; render(); } return; }
-      if (S.view !== "browse") { S.view = "browse"; S.round = null; }
+      if (!l) { if (S.sel || S.focus) { S.sel = S.focus = null; render(); } return; }
       if (!passes(l)) {
         if (side() !== "both" && side() !== l.side) { A.prefs.smkSide = "both"; A.savePrefs(); }
         setSites(new Set());
       }
       select(l.id, "route");
     },
-    hashArg: () => (S.view === "browse" && S.sel) || "",
+    hashArg: () => (view() === "explore" && S.sel) || "",
     busy,
-    // Leaving the mode or the map clears the radar.
+    // Leaving the view or the map clears the radar.
     leave() {
       if (!A) return;
       S.sel = S.focus = S.drawnFocus = null;
-      S.view = "browse";
       S.round = null;
       closeLightbox(false);
       if (layer) { layer.textContent = ""; layer.style.display = "none"; }

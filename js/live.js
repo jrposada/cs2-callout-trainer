@@ -1,4 +1,4 @@
-// Live mode: a round clock for a second screen. Start it when freeze time ends and dots run
+// Live tool: a round clock for a second screen. Start it when freeze time ends and dots run
 // each side's fastest routes from spawn in real time, so you see where players can be.
 // Routes come from data/routes.js (window.CALLOUT_ROUTES). This file loads before js/app.js,
 // registers itself in window.CCT_MODES, and gets the app's helpers through init(api).
@@ -355,6 +355,8 @@
     const t = e.target;
     if (t && (t.isContentEditable || (t.matches && t.matches("input, textarea, select")))) return;
     if (e.key === " " || e.code === "Space") {
+      // Space on a nav control (Live, a content button, Done) presses that control instead.
+      if (t && t.closest && t.closest(".panel-nav")) return;
       e.preventDefault();
       if (e.repeat) return;
       // A focused button would also click on keyup, so let go of it.
@@ -367,15 +369,7 @@
   });
 
   // ---------- registration ----------
-  // Add the tab here, copying a sibling's attributes, so index.html's tab list stays untouched.
-  // Runs before js/app.js, which wires up every .modes button.
-  const tabs = document.querySelector(".modes");
-  if (tabs && tabs.lastElementChild && !tabs.querySelector('[data-mode="live"]')) {
-    const b = tabs.lastElementChild.cloneNode(false);
-    b.dataset.mode = "live";
-    b.textContent = "Live";
-    tabs.appendChild(b);
-  }
+  // The Live button is in index.html (the panel's top row); js/app.js opens and closes this tool.
   window.CCT_MODES = window.CCT_MODES || {};
   window.CCT_MODES.live = {
     init(api) {
