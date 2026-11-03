@@ -1,28 +1,28 @@
 {
-  "_about": "Spawns and early-round targets for tools/make_routes.py. Targets are callout ids from data/maps.js; a target can be {\"to\": id, \"via\": [[x, y], [x, y, \"lower\"]]} to force waypoints (a third value switches level there). \"mask\": {level: {\"open\": [[x0, y0, x1, y1]], \"block\": [...]}} patches the walkable floor taken from the radar.",
+  "_about": "Spawns and early-round targets for tools/make_routes.py. Spawns are every competitive spawn point per side as [x, y] radar px (a third value gives the level), filled in by tools/fetch_spawns.py; each target keeps only the fastest run from any of them. Targets are callout ids from data/maps.js; a target can be {\"to\": id, \"via\": [[x, y], [x, y, \"lower\"]]} to force waypoints (a third value switches level there). \"mask\": {level: {\"open\": [[x0, y0, x1, y1]], \"block\": [...]}} patches the walkable floor taken from the radar.",
   "mirage": {
-    "spawns": {"T": {"x": 900, "y": 368}, "CT": {"x": 294, "y": 721}},
+    "spawns": {"T": [[905, 413], [889, 404], [873, 394], [889, 385], [873, 375], [889, 366], [873, 355], [889, 346], [873, 336], [905, 336]], "CT": [[315, 703], [291, 703], [302, 722], [315, 738], [291, 738]]},
     "targets": {
       "T": ["top-mid", "mid", "catwalk", "a-ramp", "palace", "b-apartments", "underpass"],
       "CT": ["sniper-s-nest", "jungle", "connector", "stairs", "ticket-booth", "market", "b-short", "b-site"]
     }
   },
   "dust2": {
-    "spawns": {"T": {"x": 394, "y": 928}, "CT": {"x": 616, "y": 199}},
+    "spawns": {"T": [[294, 907], [303, 920], [318, 928], [332, 920], [340, 907], [368, 904], [376, 917], [390, 926], [404, 919], [413, 908], [442, 907], [451, 920], [465, 928], [479, 920], [487, 907]], "CT": [[643, 201], [639, 183], [621, 172], [604, 182], [599, 198]]},
     "targets": {
       "T": ["top-mid", "mid-doors", "catwalk", "outside-long", "long-doors", "upper-b-tunnels", "lower-b-tunnels"],
       "CT": ["long-doors", "blue", "a-cross", "a-short", "ct-mid", "close-mid-doors", "b-doors", "b-window"]
     }
   },
   "inferno": {
-    "spawns": {"T": {"x": 105, "y": 715}, "CT": {"x": 909, "y": 349}},
+    "spawns": {"T": [[116, 702], [102, 700], [88, 704], [84, 718], [87, 731]], "CT": [[894, 376], [906, 386], [915, 366], [930, 380], [935, 363], [927, 350]]},
     "targets": {
       "T": ["banana", "logs", "t-apartments", "balcony-t", "second-mid", "mid", "top-mid", "bottom-mid"],
       "CT": ["car", "sand-bags-banana", "logs", "coffins", "top-mid", "a-long", "a-short", "pit", "arch"]
     }
   },
   "nuke": {
-    "spawns": {"T": {"x": 207, "y": 567}, "CT": {"x": 849, "y": 471}},
+    "spawns": {"T": [[215, 550], [225, 552], [235, 559], [218, 559], [226, 566], [235, 568], [215, 570], [232, 578]], "CT": [[852, 484], [862, 484], [858, 473], [851, 462], [863, 462]]},
     "mask": {"upper": {"wall_contrast": 35}},
     "targets": {
       "T": ["lobby", {"to": "outside", "via": [[520, 712]]}, "silo", "t-red", "ramp", "squeaky", "hut", "radio",
@@ -31,35 +31,35 @@
     }
   },
   "ancient": {
-    "spawns": {"T": {"x": 497, "y": 893}, "CT": {"x": 517, "y": 152}},
+    "spawns": {"T": [[474, 890], [487, 878], [499, 890], [512, 878], [525, 890]], "CT": [[552, 94], [539, 87], [520, 87], [501, 87], [488, 94]]},
     "targets": {
       "T": ["a-main", "elbow", "mid", "top-mid", "ruins", "doors", "water", "tunnels"],
       "CT": ["top-mid", "mid", "short", "long", "a-site", "ramp", "house", "dark", "b-site"]
     }
   },
   "anubis": {
-    "spawns": {"T": {"x": 526, "y": 931}, "CT": {"x": 436, "y": 209}},
+    "spawns": {"T": [[456, 946], [456, 962], [462, 935], [473, 930], [477, 946], [485, 936], [491, 925], [499, 946], [506, 925], [508, 938], [511, 950]], "CT": [[467, 231], [459, 218], [444, 213], [428, 218], [419, 231]]},
     "targets": {
       "T": ["top-mid", "alley", "ruins", "b-long", "water", "bridge", "stairs", "wood"],
       "CT": ["middle", "bridge", "double-doors", "a-connector", "main", "heaven-a", "b-site", "street"]
     }
   },
   "overpass": {
-    "spawns": {"T": {"x": 682, "y": 936}, "CT": {"x": 578, "y": 116}},
+    "spawns": {"T": [[682, 936]], "CT": [[578, 116]]},
     "targets": {
       "T": ["fountain", "playground", "party", "lower-tunnels", "connector", "monster"],
       "CT": ["a-long", "toilets", "connector", "monster", "sandbags", "bridge", "heaven", "pillar"]
     }
   },
   "train": {
-    "spawns": {"T": {"x": 136, "y": 183}, "CT": {"x": 916, "y": 855}},
+    "spawns": {"T": [[136, 183]], "CT": [[916, 855]]},
     "targets": {
       "T": ["a-main", "ivy", "popdog", "brown-halls", "b-halls", "upper-b", "b-ramp", "ladder"],
       "CT": ["ivy", "bomb-train-a", "z-connector", "ladder", "upper-b", "b-ramp", "red-b"]
     }
   },
   "vertigo": {
-    "spawns": {"T": {"x": 389, "y": 755}, "CT": {"x": 553, "y": 251}},
+    "spawns": {"T": [[389, 755]], "CT": [[553, 251]]},
     "mask": {"upper": {"open": [[486, 712, 512, 740]]}},
     "targets": {
       "T": ["a-ramp", "sand-bags", "t-stairs", "mid", "t-mid", "stairs", "ladder",
@@ -69,7 +69,7 @@
     }
   },
   "cache": {
-    "spawns": {"T": {"x": 866, "y": 597}, "CT": {"x": 96, "y": 570}},
+    "spawns": {"T": [[908, 621], [926, 619], [940, 609], [900, 599], [917, 595], [939, 592], [894, 578], [916, 579], [923, 566], [895, 561]], "CT": [[109, 462], [93, 462], [86, 446], [109, 432], [93, 432]]},
     "mask": {"upper": {"wall_contrast": 35}},
     "targets": {
       "T": ["a-main", "squeaky", "mid", "garage", "b-main", "checkers", "b-halls"],

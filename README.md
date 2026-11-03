@@ -30,7 +30,7 @@ Links are shareable: `#mirage/find`, `#nuke/explore`, `#mirage/smokes/find`, and
 
 ## Live mode
 
-The **Live** button is for a second screen during a match. Hit **Start** (or `Space`) when freeze time ends and dots run from each spawn along the fastest routes to the early peek spots in real time, with a round clock and a list of arrival times. Filter by side, pick a weapon to rescale the times, or slow playback down to study (`R` resets). **Done** (or the Live button again) takes you back to where you were. Links work too: `#mirage/live`.
+The **Live** button is for a second screen during a match. Hit **Start** (or `Space`) when freeze time ends and dots run along the fastest route to each early peek spot from whichever competitive spawn gets there first, in real time, with a round clock and a list of arrival times. Filter by side, pick a weapon to rescale the times, or slow playback down to study (`R` resets). **Done** (or the Live button again) takes you back to where you were. Links work too: `#mirage/live`.
 
 ## Smoke line-ups
 
@@ -84,8 +84,9 @@ A line-up without `shots` shows the "Screenshot needed" placeholder and requests
 - **Positions** were placed by hand on the radars, so some are approximate. Dust II has had a review pass against several callout guides.
 - **Smoke line-ups** are sourced from [csnades.gg](https://csnades.gg). We link to each line-up's page for its video and screenshots and copy nothing; the text and the radar positions are our own.
 - **Zones** were generated from the radar by `tools/make_polygons.py` (see below), so their edges are a starting point. Fix them with **Edit zones**.
+- **Spawn points** for Live mode are the competitive spawns from [setpos.gg's CS2 spawn dataset](https://github.com/setposgg/cs2-spawns) (CC BY 4.0), placed on the radar with the overview origins from awpy-data. Overpass, Train and Vertigo aren't in that dataset yet, so they still use one hand-placed spawn per side.
 
-Counter-Strike and its map radars belong to Valve. This project is not affiliated with Valve, Total CS or csnades.gg.
+Counter-Strike and its map radars belong to Valve. This project is not affiliated with Valve, Total CS, csnades.gg or setpos.gg.
 
 ## Fixing a zone
 
@@ -105,9 +106,10 @@ python3 tools/make_polygons.py --map dust2 --force   # rebuild one map from scra
 
 ## Regenerating routes
 
-`tools/make_routes.py` builds `data/routes.js`, the fastest runs from each spawn to the common early-round spots. Spawns and targets are listed in `tools/routes.json`. Paths are shortest paths on the radar floor (kept a little off the walls), and times assume knife speed (250 units/s). Where the radar is wrong, `routes.json` can force "via" points or patch the floor.
+`tools/make_routes.py` builds `data/routes.js`, the fastest run to each common early-round spot. Spawns and targets are listed in `tools/routes.json`. Each side lists every competitive spawn (five on most maps, more on some, of which CS2 picks five each round); each spot is routed from all of them and only the fastest run is kept. `tools/fetch_spawns.py` refreshes those spawns from setpos.gg. Paths are shortest paths on the radar floor (kept a little off the walls), and times assume knife speed (250 units/s). Where the radar is wrong, `routes.json` can force "via" points or patch the floor.
 
 ```sh
+python3 tools/fetch_spawns.py                   # refresh spawn points in routes.json (needs network)
 python3 tools/make_routes.py                    # all maps
 python3 tools/make_routes.py --map mirage --png /tmp   # one map, plus an overlay image to check it
 ```

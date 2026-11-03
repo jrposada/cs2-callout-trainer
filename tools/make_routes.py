@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build data/routes.js: the fastest runs from each spawn to the early-round spots.
+"""Build data/routes.js: the fastest run to each early-round spot from any spawn.
 
 How it works
   * The walkable floor of each radar level comes from its alpha channel, the
@@ -15,6 +15,10 @@ How it works
   * A route can pass "via" points, e.g. to take a drop or a door the mask gets
     wrong. A via point on another level ([x, y, "lower"]) switches level there
     (stairs, ladders); such routes also get "segments", one per level.
+
+  * Every side has several spawn points (all competitive spawns, see
+    tools/fetch_spawns.py). Each target is routed from each of them and only
+    the shortest run is kept; "from" in the output is that spawn's index.
 
 tools/routes.json holds the spawns and targets. Run:
   python3 tools/make_routes.py                 # all maps
@@ -143,50 +147,71 @@ def plen(pts):
     return sum(math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(pts, pts[1:]))
 
 
+def spawn_points(spec):
+    """{side: [(x, y, level), ...]} from routes.json; a lone {"x", "y"} still works."""
+    out = {}
+    for side, v in spec["spawns"].items():
+        pts = v if isinstance(v, list) else [[v["x"], v["y"], v.get("level", "upper")]]
+        out[side] = [(p[0], p[1], p[2] if len(p) > 2 else "upper") for p in pts]
+    return out
+
+
+def run(levels, pts):
+    """Path through pts [(x, y, level), ...] as [[level, pixels], ...], or None."""
+    segs = []
+    for (ax, ay, al), (bx, by, bl) in zip(pts, pts[1:]):
+        if al != bl:            # level change: start a new segment at b
+            segs.append([bl, []])
+            continue
+        p = levels[al].path((ax, ay), (bx, by))
+        if p is None:
+            return None
+        if not segs or segs[-1][0] != al:
+            segs.append([al, []])
+        segs[-1][1].extend(p if not segs[-1][1] else p[1:])
+    return [(lv, rdp(p, RDP_EPS, levels[lv])) for lv, p in segs if p]
+
+
 def build_map(m, spec, report):
     callouts = {c["id"]: c for c in m["callouts"]}
     edits = spec.get("mask", {})
     levels = {lv: Level(m, lv, edits.get(lv, {})) for lv in m["levels"]}
-    spawns = spec["spawns"]
+    spawns = spawn_points(spec)
     routes = []
     for side in ("T", "CT"):
-        sp = spawns[side]
         for t in spec["targets"][side]:
             t = {"to": t} if isinstance(t, str) else t
             c = callouts[t["to"]]
             tlevel = c.get("level", "upper")
-            pts = [(sp["x"], sp["y"], sp.get("level", "upper"))]
-            for v in t.get("via", []):
-                pts.append((v[0], v[1], v[2] if len(v) > 2 else pts[-1][2]))
-            pts.append((c["x"], c["y"], tlevel))
-            if pts[-2][2] != tlevel:
-                report.append(f"{m['id']}: skipped {side} -> {t['to']} (other level, no connector)")
-                continue
-            segs, ok = [], True
-            for (ax, ay, al), (bx, by, bl) in zip(pts, pts[1:]):
-                if al != bl:            # level change: start a new segment at b
-                    segs.append([bl, []])
+            tail = [(v[0], v[1], v[2] if len(v) > 2 else None) for v in t.get("via", [])]
+            tail.append((c["x"], c["y"], tlevel))
+            # Run it from every spawn on this side and keep only the fastest.
+            best = None
+            for i, sp in enumerate(spawns[side]):
+                pts = [sp]
+                for x, y, lv in tail[:-1]:
+                    pts.append((x, y, lv or pts[-1][2]))
+                pts.append(tail[-1])
+                if pts[-2][2] != tlevel:
                     continue
-                p = levels[al].path((ax, ay), (bx, by))
-                if p is None:
-                    ok = False
-                    break
-                if not segs or segs[-1][0] != al:
-                    segs.append([al, []])
-                segs[-1][1].extend(p if not segs[-1][1] else p[1:])
-            if not ok:
-                report.append(f"{m['id']}: no path {side} -> {t['to']}")
+                segs = run(levels, pts)
+                if segs is None:
+                    continue
+                units = sum(plen(p) for _, p in segs) * m["scale"]
+                if best is None or units < best[0]:
+                    best = (units, i, segs)
+            if best is None:
+                report.append(f"{m['id']}: no path {side} -> {t['to']} from any spawn")
                 continue
-            segs = [(lv, rdp(p, RDP_EPS, levels[lv])) for lv, p in segs if p]
-            units = sum(plen(p) for _, p in segs) * m["scale"]
-            r = {"id": f"{side.lower()}-{t['to']}", "side": side, "to": t["to"], "level": tlevel,
+            units, i, segs = best
+            r = {"id": f"{side.lower()}-{t['to']}", "side": side, "to": t["to"], "from": i, "level": tlevel,
                  "path": [v for xy in segs[-1][1] for v in xy],
                  "units": int(round(units)), "time": round(units / SPEED, 1)}
             if len(segs) > 1:
                 r["segments"] = [{"level": lv, "path": [v for xy in p for v in xy]} for lv, p in segs]
             routes.append(r)
     out = {"speed": SPEED,
-           "spawns": {s: {"x": v["x"], "y": v["y"], "level": v.get("level", "upper")} for s, v in spawns.items()},
+           "spawns": {s: [{"x": x, "y": y, "level": lv} for x, y, lv in pts] for s, pts in spawns.items()},
            "routes": routes}
     return out, levels
 
@@ -241,8 +266,10 @@ def draw(m, data, levels, png_dir, show_mask):
                 label = f"{r['to']} {r['time']}s"
                 d.text((x + 5, y - 6), label, fill=(0, 0, 0, 255), stroke_width=2, stroke_fill=(0, 0, 0, 255))
                 d.text((x + 5, y - 6), label, fill=col + (255,))
-        for side, sp in data["spawns"].items():
-            if sp["level"] == lv:
+        for side, pts in data["spawns"].items():
+            for sp in pts:
+                if sp["level"] != lv:
+                    continue
                 d.rectangle([sp["x"] - 5, sp["y"] - 5, sp["x"] + 5, sp["y"] + 5], outline=(255, 255, 255, 255), width=2)
         tiles.append(img)
     out = Image.new("RGBA", (1024 * len(tiles), 1024))
