@@ -315,14 +315,6 @@
     const R = landR();
     A.fitBox([Math.min(l.from.x, l.to.x - R), Math.min(l.from.y, l.to.y - R), Math.max(l.from.x, l.to.x + R), Math.max(l.from.y, l.to.y + R)], 0.15);
   }
-  function setFocus(key) {
-    const t = targets(filtered()).get(key);
-    S.focus = t ? key : null;
-    S.sel = null;
-    render();
-    A.updateHash();
-    if (t) A.announce(`${t.name}: ${t.items.length} line-up${t.items.length === 1 ? "" : "s"}. Pick a throw spot.`);
-  }
   // how: "list" (a row or [ ]), "radar" (a throw spot), "route" (a link)
   function select(id, how) {
     const l = all().find((x) => x.id === id);
@@ -387,7 +379,7 @@
     A.announce(`${v === "both" ? "Both sides" : SIDE_NAME[v] + " side"}: ${n} line-up${n === 1 ? "" : "s"}.`);
   }
 
-  // Map clicks: a throw spot of the focused target (toggles like its list row), then a landing, else one step back.
+  // Map clicks: a throw spot of the focused target, then a landing, else one step back. Both toggle like a list row.
   function click(p) {
     if (view() === "find") { const q = S.round; if (q && !q.done && q.phase === "ask") answer(p); else goLevel((ghostAt(p) || {}).level); return; }
     if (view() !== "explore") return;
@@ -412,7 +404,13 @@
     // A ghost (line-up end on the other level) wins over a landing here only when it is closer.
     const gl = ghostAt(p);
     if (gl && gl.d < bd) return goLevel(gl.level);
-    if (t) { if (t.key !== S.focus || S.sel) setFocus(t.key); return; }
+    if (t) {
+      // A landing acts like its list row: it opens a line-up (one thrown from this level first), or closes the open one.
+      const cur = list.find((l) => l.id === S.sel);
+      if (cur && cur.to.callout === t.key) back();
+      else select((t.items.find((l) => l.from.level === lv) || t.items[0]).id, "radar");
+      return;
+    }
     back();
   }
 
