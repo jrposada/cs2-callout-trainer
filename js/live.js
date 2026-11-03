@@ -53,6 +53,11 @@
     const d = R && A.state.map && R[A.state.map.id];
     return d && Array.isArray(d.routes) && d.routes.length ? d : null;
   }
+  // A side's spawn points: a list (one per competitive spawn), or a lone point in older data.
+  function spawnList(d, s) {
+    const v = d.spawns && d.spawns[s];
+    return Array.isArray(v) ? v : v ? [v] : [];
+  }
   function leg(level, flat) {
     const pts = [], cum = [0];
     for (let i = 0; i + 1 < (flat || []).length; i += 2) pts.push({ x: +flat[i], y: +flat[i + 1] });
@@ -73,7 +78,7 @@
         const last = legs[legs.length - 1];
         const c = A.callout(r.to);
         return {
-          id: r.id, side: r.side === "CT" ? "ct" : "t", sideName: r.side === "CT" ? "CT" : "T",
+          id: r.id, side: r.side === "CT" ? "ct" : "t", sideName: r.side === "CT" ? "CT" : "T", from: +r.from || 0,
           name: c ? c.name : String(r.to || r.id), time: Math.max(0, +r.time * k),
           legs, len: legs.reduce((a, l) => a + l.len, 0), end: last.pts[last.pts.length - 1], endLevel: last.level,
         };
@@ -114,10 +119,15 @@
     const d = mapData();
     if (!d) return;
     const sd = side();
+    // Every competitive spawn of the side; solid where a shown route starts, bold for the selected one.
     for (const s of ["T", "CT"]) {
-      const sp = d.spawns && d.spawns[s];
-      if (!sp || (sd !== "both" && sd !== s) || (sp.level || "upper") !== lv) continue;
-      A.el("circle", { class: "live-spawn " + s.toLowerCase(), cx: sp.x, cy: sp.y, "data-r": 11 }, gSpawn);
+      if (sd !== "both" && sd !== s) continue;
+      spawnList(d, s).forEach((sp, i) => {
+        if ((sp.level || "upper") !== lv) return;
+        const from = L.routes.filter((rt) => rt.sideName === s && rt.from === i);
+        const cls = `live-spawn ${s.toLowerCase()}${from.length ? " is-used" : ""}${from.some((rt) => rt.id === L.sel) ? " is-sel" : ""}`;
+        A.el("circle", { class: cls, cx: sp.x, cy: sp.y, "data-r": 5 }, gSpawn);
+      });
     }
     // Labels of routes that end at (nearly) the same spot stack instead of overlapping.
     const stack = [];
