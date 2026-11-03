@@ -332,7 +332,8 @@
     S.sel = l.id;
     S.focus = l.to.callout;
     render();
-    frame(l);
+    // Map clicks keep the zoom where it is; the list and links frame the line-up.
+    if (how !== "radar") frame(l);
     A.updateHash();
     A.announce(`${l.name}, from ${l.from.name}, ${SIDE_NAME[l.side]} side. Aim: ${l.aim}`);
     const panel = A.panel;
@@ -384,7 +385,7 @@
     A.announce(`${v === "both" ? "Both sides" : SIDE_NAME[v] + " side"}: ${n} line-up${n === 1 ? "" : "s"}.`);
   }
 
-  // Map clicks: a throw spot of the focused target, then a landing, else one step back.
+  // Map clicks: a throw spot of the focused target (toggles like its list row), then a landing, else one step back.
   function click(p) {
     if (view() === "find") { const q = S.round; if (q && !q.done && q.phase === "ask") answer(p); else goLevel((ghostAt(p) || {}).level); return; }
     if (view() !== "explore") return;
@@ -396,7 +397,7 @@
         const d = dist(p, l.from);
         if (d <= HIT_PX * u && d < bd) { best = l; bd = d; }
       }
-      if (best) { if (best.id !== S.sel) select(best.id, "radar"); return; }
+      if (best) { if (best.id === S.sel) back(); else select(best.id, "radar"); return; }
     }
     const R = Math.max(landR(), HIT_PX * u);
     let t = null;
