@@ -321,12 +321,7 @@
     S.sel = null;
     render();
     A.updateHash();
-    if (!t) return;
-    A.announce(`${t.name}: ${t.items.length} line-up${t.items.length === 1 ? "" : "s"}. Pick a throw spot.`);
-    // Bring the landing's rows into view. Narrow screens skip this: the panel sits below the map, and the
-    // next tap (a throw spot) is on the map.
-    const row = !A.NARROW.matches && A.panel.querySelector(".smk-list button.is-focus");
-    if (row) { A.panel.style.scrollPaddingTop = ""; row.scrollIntoView({ block: "nearest" }); }
+    if (t) A.announce(`${t.name}: ${t.items.length} line-up${t.items.length === 1 ? "" : "s"}. Pick a throw spot.`);
   }
   // how: "list" (a row or [ ]), "radar" (a throw spot), "route" (a link)
   function select(id, how) {
@@ -571,8 +566,7 @@
   }
   function row(l) {
     const t = l.technique;
-    const state = l.id === S.sel ? " is-active" : l.to.callout === S.focus ? " is-focus" : "";
-    const cls = `side-${l.side}${state}${l.status !== "checked" ? " is-unverified" : ""}`;
+    const cls = `side-${l.side}${l.id === S.sel ? " is-active" : ""}${l.status !== "checked" ? " is-unverified" : ""}`;
     return `<li><button type="button" data-id="${esc(l.id)}" class="${cls}"${l.id === S.sel ? ` aria-current="true"` : ""}>
         <span class="sd">${SIDE_NAME[l.side]}</span>
         <span class="nm">${esc(l.name)}</span>
