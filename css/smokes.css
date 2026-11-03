@@ -158,10 +158,20 @@
 .smk-face.t { stroke: var(--t-gold); }
 .smk-face.ct { stroke: var(--ct-dot); }
 .smk-hit { fill: transparent; stroke: none; }
+/* Ghost: a line-up end on the other level of Nuke or Vertigo, with an "upper" / "lower" chip. */
+.smk-ghost-ring { fill: var(--ink-deep); fill-opacity: .35; stroke: var(--smoke); stroke-width: 1.5; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }
+.smk-ghost.t .smk-ghost-ring { stroke: var(--t-gold); }
+.smk-ghost.ct .smk-ghost-ring { stroke: var(--ct-dot); }
+.smk-ghost.is-sel .smk-ghost-ring, .smk-ghost.is-focus .smk-ghost-ring { stroke-width: 2.5; }
+.smk-ghost.is-target .smk-ghost-ring { stroke: var(--t-gold); stroke-width: 2.5; }
+.smk-ghost-chip { fill: var(--ink-deep); stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.smk-ghost-text { fill: var(--text); font-family: var(--display); font-weight: 600; text-anchor: middle; dominant-baseline: central; }
+.smk-lvl { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
 
 /* Focus: the other landings step back. Selection: everything but the line-up steps back further. */
-.smk-layer.has-focus .smk-land:not(.is-focus), .smk-layer.has-focus .smk-count:not(.is-focus) { opacity: .25; }
-.smk-layer.has-sel .smk-land:not(.is-sel), .smk-layer.has-sel .smk-count,
+.smk-layer.has-focus .smk-land:not(.is-focus), .smk-layer.has-focus .smk-count:not(.is-focus),
+.smk-layer.has-focus .smk-ghost.is-land:not(.is-focus) { opacity: .25; }
+.smk-layer.has-sel .smk-land:not(.is-sel), .smk-layer.has-sel .smk-count, .smk-layer.has-sel .smk-ghost.is-land:not(.is-sel),
 .smk-layer .is-dim { opacity: .15; }
 
 /* Find it */

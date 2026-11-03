@@ -193,6 +193,45 @@
     return `M${a.x},${a.y} Q${c.x.toFixed(1)},${c.y.toFixed(1)} ${b.x},${b.y}`;
   }
 
+  // Two-level maps (Nuke, Vertigo): a line-up end on the other level is a "ghost", a dashed ring at its spot
+  // with an "upper" / "lower" chip. Tapping it switches the map to that level (see ghostAt). Keyboard users
+  // get the same switch as a button on the card and in the drill reveal (levelBtn).
+  function ghost(parent, p, land, cls) {
+    const g = A.el("g", { class: `smk-ghost${land ? " is-land" : ""}${cls ? " " + cls : ""}`, "data-x": p.x, "data-y": p.y, "data-level": p.level, "data-land": land ? 1 : 0 }, parent);
+    A.el("circle", { class: "smk-ghost-ring", cx: p.x, cy: p.y, ...(land ? { r: landR() } : { "data-r": 7 }) }, g);
+    A.el("rect", { class: "smk-ghost-chip", rx: 3 }, g);
+    A.el("text", { class: "smk-ghost-text" }, g).textContent = p.level;
+    return g;
+  }
+  // The ghost under a map point, as { level, d }, or null. Its chip counts as a direct hit (d 0), so a ghost
+  // stacked on a landing of this level (Nuke's A over B) can still be reached.
+  function ghostAt(p) {
+    const u = A.unit(), pad = 6 * u;
+    let best = null;
+    layer.querySelectorAll(".smk-ghost").forEach((n) => {
+      const c = n.querySelector("rect"), cx = Number(c.getAttribute("x")), cy = Number(c.getAttribute("y"));
+      const onChip = p.x >= cx - pad && p.x <= cx + Number(c.getAttribute("width")) + pad && p.y >= cy - pad && p.y <= cy + Number(c.getAttribute("height")) + pad;
+      const d = onChip ? 0 : Math.hypot(p.x - Number(n.dataset.x), p.y - Number(n.dataset.y));
+      const r = n.dataset.land === "1" ? Math.max(landR(), HIT_PX * u) : HIT_PX * u;
+      if (d <= r && (!best || d < best.d)) best = { level: n.dataset.level, d };
+    });
+    return best;
+  }
+  function goLevel(lv) {
+    if (!lv || lv === A.state.level) return;
+    A.setLevel(lv);
+    A.announce(`${lv[0].toUpperCase()}${lv.slice(1)} level.`);
+  }
+  // A button that switches to the level of a line-up's other end, or "" when both ends share a level.
+  function levelBtn(l) {
+    if (l.from.level === l.to.level) return "";
+    const other = A.state.level === l.from.level ? l.to.level : l.from.level;
+    return `<p class="smk-lvl">Thrown from the ${l.from.level} level, lands on the ${l.to.level} level. <button type="button" class="link-btn" data-goto-level="${other}">Show ${other} level</button></p>`;
+  }
+  function bindLevelBtns() {
+    A.panel.querySelectorAll("[data-goto-level]").forEach((b) => (b.onclick = () => goLevel(b.dataset.gotoLevel)));
+  }
+
   function draw(list) {
     layer.textContent = "";
     const lv = A.state.level;
@@ -203,7 +242,12 @@
     const gLand = g(), gArc = g(), gThrow = g(), gBadge = g(), gHit = g("smk-hits");
     const R = landR();
     for (const t of targets(list).values()) {
-      if (t.level !== lv) continue;
+      if (t.level !== lv) {
+        // A landing on the other level shows as a ghost when it is focused or thrown from this level.
+        const here = t.items.some((l) => l.from.level === lv);
+        if (t.key === S.focus || here) ghost(gLand, t, true, t.key === S.focus ? "is-focus" + (sel && sel.to.callout === t.key ? " is-sel " + sel.side : "") : "");
+        continue;
+      }
       let cls = "smk-land";
       if (t.key === S.focus) cls += " is-focus";
       if (sel && sel.to.callout === t.key) cls += " is-sel " + sel.side;
@@ -220,13 +264,17 @@
       const animate = S.drawnFocus !== S.focus && !sel && !REDUCED.matches;
       S.drawnFocus = S.focus;
       for (const l of list) {
-        if (l.to.callout !== S.focus || l.from.level !== lv || l.to.level !== lv) continue;
+        if (l.to.callout !== S.focus) continue;
         const on = l.id === S.sel;
         const cls = ` ${l.side}${on ? " is-sel" : sel ? " is-dim" : ""}`;
-        const d = arcPath(l.from, l.to);
-        const casing = A.el("path", { class: "fb-casing smk-casing" + cls, d }, gArc);
-        const arc = A.el("path", { class: "smk-arc" + cls, d }, gArc);
-        if (animate) { casing.classList.add("is-draw"); arc.classList.add("is-draw"); }
+        // Only the ends on this level are drawn; a throw spot on the other level is a ghost, with no arc.
+        if (l.from.level !== lv) { if (l.to.level === lv) ghost(gThrow, l.from, false, cls.trim()); continue; }
+        if (l.to.level === lv) {
+          const d = arcPath(l.from, l.to);
+          const casing = A.el("path", { class: "fb-casing smk-casing" + cls, d }, gArc);
+          const arc = A.el("path", { class: "smk-arc" + cls, d }, gArc);
+          if (animate) { casing.classList.add("is-draw"); arc.classList.add("is-draw"); }
+        }
         A.el("circle", { class: "smk-throw" + cls, cx: l.from.x, cy: l.from.y, "data-r": on ? 8 : 6 }, gThrow);
         if (on) {
           const len = dist(l.from, l.to) || 1;
@@ -245,6 +293,14 @@
     layer.querySelectorAll(".smk-face").forEach((n) => {
       n.setAttribute("x2", Number(n.getAttribute("x1")) + Number(n.dataset.ux) * 14 * u);
       n.setAttribute("y2", Number(n.getAttribute("y1")) + Number(n.dataset.uy) * 14 * u);
+    });
+    // Ghost chips sit just below their ring, at a fixed screen size.
+    layer.querySelectorAll(".smk-ghost").forEach((n) => {
+      const x = Number(n.dataset.x), ring = n.firstChild, w = 46 * u, h = 17 * u;
+      const y = Number(n.dataset.y) + Number(ring.getAttribute("r")) + 3 * u;
+      const rect = n.querySelector("rect"), text = n.querySelector("text");
+      rect.setAttribute("x", x - w / 2); rect.setAttribute("y", y); rect.setAttribute("width", w); rect.setAttribute("height", h);
+      text.setAttribute("x", x); text.setAttribute("y", y + h / 2); text.setAttribute("font-size", 12 * u);
     });
     // The draw-in dash is in screen px (non-scaling stroke), so it follows the zoom.
     layer.querySelectorAll("path.is-draw").forEach((p) => {
@@ -271,7 +327,8 @@
   function select(id, how) {
     const l = all().find((x) => x.id === id);
     if (!l) return;
-    if (l.to.level !== A.state.level) A.setLevel(l.to.level);
+    // Stay on this level if either end is here (the other end shows as a ghost).
+    if (l.to.level !== A.state.level && l.from.level !== A.state.level) A.setLevel(l.to.level);
     S.sel = l.id;
     S.focus = l.to.callout;
     render();
@@ -329,7 +386,7 @@
 
   // Map clicks: a throw spot of the focused target, then a landing, else one step back.
   function click(p) {
-    if (view() === "find") { const q = S.round; if (q && !q.done && q.phase === "ask") answer(p); return; }
+    if (view() === "find") { const q = S.round; if (q && !q.done && q.phase === "ask") answer(p); else goLevel((ghostAt(p) || {}).level); return; }
     if (view() !== "explore") return;
     const u = A.unit(), lv = A.state.level, list = filtered();
     let best = null, bd = Infinity;
@@ -349,6 +406,9 @@
       const d = dist(p, x);
       if (d <= R && d < bd) { t = x; bd = d; }
     }
+    // A ghost (line-up end on the other level) wins over a landing here only when it is closer.
+    const gl = ghostAt(p);
+    if (gl && gl.d < bd) return goLevel(gl.level);
     if (t) { if (t.key !== S.focus || S.sel) setFocus(t.key); return; }
     back();
   }
@@ -492,6 +552,7 @@
     return `<div class="card smk-card ${cls}">
       <div class="smk-head"><h3>${esc(l.name)}</h3><span class="chip ${l.side}">${SIDE_NAME[l.side]}</span></div>
       <p class="alt">from ${esc(l.from.name)} · ${SITE_NAME[l.site]}</p>
+      ${levelBtn(l)}
       <dl class="smk-rows">
         <div class="smk-row"><dt class="smk-k">Stand</dt><dd>${esc(l.stand)}</dd></div>
         <div class="smk-row"><dt class="smk-k">Aim</dt><dd class="smk-aim">${esc(l.aim)}</dd></div>
@@ -536,6 +597,7 @@
     if (a.dataset.site) return `.flt-chip[data-site="${a.dataset.site}"]`;
     if (a.dataset.v && a.parentElement && a.parentElement.id) return `#${a.parentElement.id} button[data-v="${a.dataset.v}"]`;
     if (a.dataset.shot) return `.smk-thumb[data-shot="${a.dataset.shot}"]`;
+    if (a.dataset.gotoLevel) return "[data-goto-level]";
     if (a.id) return "#" + a.id;
     return ".smk-list button[data-id]";
   }
@@ -601,6 +663,7 @@
       if (b.dataset.id === S.sel) back(); else select(b.dataset.id, "list");
     };
     if (sel) bindShots(sel);
+    bindLevelBtns();
     if (keep) {
       const f = A.panel.querySelector(keep);
       if (f) f.focus({ preventScroll: true });
@@ -659,8 +722,10 @@
   function answer(p) {
     const q = S.round, l = cur();
     const d = dist(p, l.from), units = d * A.state.map.scale;
-    const kind = units <= HIT_U ? "hit" : units <= CLOSE_U ? "close" : "miss";
-    q.results[q.i] = { id: l.id, kind, d, p: { x: p.x, y: p.y }, pick: null };
+    // A click on the wrong level of a two-level map is a miss, however close.
+    const lv = A.state.level, offLevel = lv !== l.from.level;
+    const kind = offLevel ? "miss" : units <= HIT_U ? "hit" : units <= CLOSE_U ? "close" : "miss";
+    q.results[q.i] = { id: l.id, kind, d, p: { x: p.x, y: p.y }, lv, offLevel, pick: null };
     // The right throw plus up to five other common ones, in random order.
     const right = techLabel(l.technique);
     q.options = shuffle([right, ...shuffle(TECH_POOL.filter((x) => x !== right)).slice(0, 5)]);
@@ -670,7 +735,7 @@
     const R = landR(), xs = [p.x, l.from.x, l.to.x - R, l.to.x + R], ys = [p.y, l.from.y, l.to.y - R, l.to.y + R];
     A.fitBox([Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)], 0.15);
     const m = A.meters(d);
-    A.announce(`${RESULT[kind]}, ${m} metre${m === 1 ? "" : "s"} off. Stand: ${l.stand} Which throw is it? Press 1 to ${q.options.length}, or Escape to skip.`);
+    A.announce(`${RESULT[kind]}, ${offLevel ? `wrong level, it's thrown from the ${l.from.level} level` : `${m} metre${m === 1 ? "" : "s"} off`}. Stand: ${l.stand} Which throw is it? Press 1 to ${q.options.length}, or Escape to skip.`);
     const f = A.panel.querySelector(".smk-choices .choice");
     if (f) f.focus({ preventScroll: true });
   }
@@ -755,10 +820,10 @@
       <div class="prompt">
         <p class="ask">Question ${q.i + 1} of ${q.items.length}. Where do you stand to smoke</p>
         <h2 class="callname" tabindex="-1">${esc(l.name)}</h2>
-        <p class="hint"><span class="chip ${l.side}">${SIDE_NAME[l.side]} side</span></p>
+        <p class="hint"><span class="chip ${l.side}">${SIDE_NAME[l.side]} side</span>${l.from.level !== l.to.level ? ` <span class="chip">Thrown from the ${l.from.level} level</span>` : ""}</p>
       </div>
-      ${r ? `<div class="smk-result${standShot ? " has-shot" : ""}"><div class="result ${r.kind}"><h4>${RESULT[r.kind]}</h4><p class="detail">${A.meters(r.d)} m off.</p>${accBadge(l)}
-          <p class="desc"><strong>Stand:</strong> ${esc(l.from.name)}. ${esc(l.stand)}</p></div>${standShot}</div>
+      ${r ? `<div class="smk-result${standShot ? " has-shot" : ""}"><div class="result ${r.kind}"><h4>${RESULT[r.kind]}</h4><p class="detail">${r.offLevel ? `Wrong level: it's thrown from the ${l.from.level} level.` : `${A.meters(r.d)} m off.`}</p>${accBadge(l)}
+          <p class="desc"><strong>Stand:</strong> ${esc(l.from.name)}. ${esc(l.stand)}</p>${levelBtn(l)}</div>${standShot}</div>
         <p class="ask smk-ask">Which throw? <span class="tag-bonus">not scored in streak</span></p>
         ${choices}
         ${picked ? `<div class="smk-aimblock${aimShot ? " has-shot" : ""}">${aimShot}<div class="smk-aimtext"><span class="smk-k">Aim</span><p class="smk-aim">${esc(l.aim)}</p><p class="smk-tech-note">${techChips(l)}</p>${l.source ? `<p class="smk-src-note">${sourceLink(l)}</p>` : ""}</div></div>` : ""}`
@@ -771,6 +836,7 @@
     const ch = A.$("#smkChoices");
     if (ch) ch.onclick = (e) => { const b = e.target.closest("button[data-i]"); if (b) pickThrow(Number(b.dataset.i)); };
     bindShots(l);
+    bindLevelBtns();
     const nx = A.$("#smkNext");
     if (nx) nx.onclick = nextQuestion;
     const sk = A.$("#smkSkip");
@@ -849,30 +915,39 @@
   }
 
   // Drill radar: the question shows only the glowing landing; the reveal adds the true spot, the
-  // tolerance rings, your guess and the arc.
+  // tolerance rings, your guess and the arc. On a two-level map, an end on the other level is a ghost.
   function drawDrill() {
     layer.textContent = "";
     layer.classList.remove("has-focus", "has-sel");
     const q = S.round, l = cur(), r = q.results[q.i], R = landR(), lv = A.state.level;
-    if (l.to.level !== lv) return;
     const g = A.el("g", {}, layer);
     if (!r) {
-      A.el("circle", { class: "smk-land is-target", cx: l.to.x, cy: l.to.y, r: R }, g);
+      if (l.to.level === lv) A.el("circle", { class: "smk-land is-target", cx: l.to.x, cy: l.to.y, r: R }, g);
+      else ghost(g, l.to, true, "is-target");
       return rescale(A.unit());
     }
-    A.el("circle", { class: "smk-land is-sel " + l.side, cx: l.to.x, cy: l.to.y, r: R }, g);
     drawLineup(g, l);
-    for (const u of [HIT_U, CLOSE_U]) A.el("circle", { class: "smk-tol", cx: l.from.x, cy: l.from.y, r: A.unitsToPx(u) }, g);
-    const pts = { x1: r.p.x, y1: r.p.y, x2: l.from.x, y2: l.from.y };
-    if (r.kind !== "hit") { A.el("line", { class: "fb-casing", ...pts }, g); A.el("line", { class: "fb-line", ...pts }, g); }
-    A.el("circle", { class: "fb-guess" + (r.kind !== "miss" ? " " + r.kind : ""), cx: r.p.x, cy: r.p.y, "data-r": 5 }, g);
+    const fromOn = l.from.level === lv;
+    if (fromOn) for (const u of [HIT_U, CLOSE_U]) A.el("circle", { class: "smk-tol", cx: l.from.x, cy: l.from.y, r: A.unitsToPx(u) }, g);
+    if (r.lv === lv) {
+      const pts = { x1: r.p.x, y1: r.p.y, x2: l.from.x, y2: l.from.y };
+      if (r.kind !== "hit" && fromOn) { A.el("line", { class: "fb-casing", ...pts }, g); A.el("line", { class: "fb-line", ...pts }, g); }
+      A.el("circle", { class: "fb-guess" + (r.kind !== "miss" ? " " + r.kind : ""), cx: r.p.x, cy: r.p.y, "data-r": 5 }, g);
+    }
     rescale(A.unit());
   }
-  // A line-up as when selected: dashed arc, filled throw spot and its facing tick.
+  // A line-up as when selected: its landing, dashed arc, filled throw spot and its facing tick. Only the
+  // ends on this level are drawn; the other one is a ghost.
   function drawLineup(g, l) {
-    const d = arcPath(l.from, l.to);
-    A.el("path", { class: `fb-casing smk-casing ${l.side} is-sel`, d }, g);
-    A.el("path", { class: `smk-arc ${l.side} is-sel`, d }, g);
+    const lv = A.state.level, fromOn = l.from.level === lv, toOn = l.to.level === lv;
+    if (toOn) A.el("circle", { class: "smk-land is-sel " + l.side, cx: l.to.x, cy: l.to.y, r: landR() }, g);
+    else ghost(g, l.to, true, "is-sel " + l.side);
+    if (!fromOn) { ghost(g, l.from, false, "is-sel " + l.side); return; }
+    if (toOn) {
+      const d = arcPath(l.from, l.to);
+      A.el("path", { class: `fb-casing smk-casing ${l.side} is-sel`, d }, g);
+      A.el("path", { class: `smk-arc ${l.side} is-sel`, d }, g);
+    }
     A.el("circle", { class: `smk-throw ${l.side} is-sel`, cx: l.from.x, cy: l.from.y, "data-r": 8 }, g);
     const len = dist(l.from, l.to) || 1;
     A.el("line", { class: "smk-face " + l.side, x1: l.from.x, y1: l.from.y, "data-ux": (l.to.x - l.from.x) / len, "data-uy": (l.to.y - l.from.y) / len }, g);
@@ -880,15 +955,14 @@
   function drawSummary(missed) {
     layer.textContent = "";
     layer.classList.remove("has-focus", "has-sel");
-    const lv = A.state.level, R = landR();
+    const lv = A.state.level;
     const g = A.el("g", {}, layer);
     for (const l of missed) {
-      if (l.to.level !== lv || l.from.level !== lv) continue;
-      A.el("circle", { class: "smk-land is-sel " + l.side, cx: l.to.x, cy: l.to.y, r: R }, g);
+      if (l.to.level !== lv && l.from.level !== lv) continue;
       drawLineup(g, l);
     }
     for (const r of S.round.results) {
-      if (r.kind !== "hit") A.el("circle", { class: "fb-guess" + (r.kind === "close" ? " close" : ""), cx: r.p.x, cy: r.p.y, "data-r": 5 }, g);
+      if (r.kind !== "hit" && r.lv === lv) A.el("circle", { class: "fb-guess" + (r.kind === "close" ? " close" : ""), cx: r.p.x, cy: r.p.y, "data-r": 5 }, g);
     }
     rescale(A.unit());
   }
