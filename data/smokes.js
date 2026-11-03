@@ -1,9 +1,10 @@
 // Smoke line-ups for the Smokes tab (js/smokes.js). Coordinates are radar px (0-1024), like data/maps.js.
 //
-// These are well-known community smokes, described in our own words and placed by hand from memory of
-// common practice. None has been tested in game by us yet, so every one ships as status "unverified" and
-// the app labels it "Approximate". Only set status "checked" (with checked: "YYYY-MM") after throwing the
-// line-up in game and seeing it land.
+// Line-ups are sourced from csnades.gg, which hosts the video and screenshots for each one. We link to it
+// and copy nothing from it: no images, no setpos, no text. Stand, aim and lands are written in our own
+// words, and both positions are placed by hand on our radar.
+// A source link makes a line-up sourced, not checked: it stays status "unverified" (the app labels it
+// "Approximate") until someone throws it in game. Only then set status "checked" (with checked: "YYYY-MM").
 //
 // Fields:
 //   id      unique per map, used in links (#mirage/smokes/<id>)
@@ -14,7 +15,10 @@
 //   technique  how to throw it, one value per facet:
 //              click "left" | "right" | "both" (left and right together)
 //              move  "stand" | "walk" | "run"     jump  true | false     crouch  true | false
-//   status  "unverified" | "checked" (checked also needs checked: "YYYY-MM")
+//   precision  optional, how exact the aim has to be: "precise" | "loose"
+//   source  optional for now: { name: "csnades.gg", url: "https://csnades.gg/<map>/smokes/<slug>" }
+//           <map> is the map id here (they match the csnades slugs); the card links to it for the video
+//   status "unverified" | "checked" (checked also needs checked: "YYYY-MM")
 //   shots   optional screenshots, taken in game by a contributor (see README, "Adding line-up screenshots"):
 //           { stand: true | "path", aim: true | "path", aimAt: [x, y] }
 //           true means the usual file, img/smokes/<map>/<id>-stand.webp or -aim.webp. aimAt is where the

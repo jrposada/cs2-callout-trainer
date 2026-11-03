@@ -122,6 +122,12 @@
 .acc.checked { border: 0; background: var(--ct-blue-soft); color: var(--ct-dot); }
 .smk-wrong { color: var(--muted); text-decoration: none; }
 .smk-wrong:hover { color: var(--text); text-decoration: underline; }
+/* Outbound link to the line-up's source (csnades.gg), and how exact its aim has to be. */
+.smk-src { color: var(--text); font-size: 13.5px; text-underline-offset: 2px; }
+.smk-src:hover { color: var(--t-gold); }
+.smk-src-note { margin: 8px 0 0; }
+.tech-prec { border-style: dashed; color: var(--muted); }
+.tech-prec.precise { border-style: solid; border-color: var(--muted); color: var(--text); }
 .smk-empty code { font-size: 13px; }
 .smk-empty a { color: var(--t-gold); }
 
