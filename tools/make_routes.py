@@ -5,6 +5,16 @@ How it works
   * The walkable floor of each radar level comes from its alpha channel, the
     same way tools/make_polygons.py builds it. tools/routes.json can paint
     extra floor ("open") or walls ("block") as rectangles where the radar is wrong.
+  * "solid_grey": true makes light-grey pixels solid, for radars where grey
+    marks boxes, railings and wall bars (not floor, as on some maps).
+  * The radar has no heights, so height steps are drawn by hand as "ledges":
+    a polyline whose low side is on the RIGHT as you walk it from the first
+    point to the last (y grows downwards, so a line drawn west-to-east has its
+    low side to the south). Crossing it downwards is a drop and costs "down"
+    seconds (default 0). Crossing it upwards needs "up" seconds (a jump onto
+    boxes, a ledge you can climb); leave "up" out and it cannot be climbed.
+    Jump time is added to the route time and kept as "stops", so Live mode
+    pauses the dot there.
   * Shortest paths are found with Dijkstra on that mask (8-connected, no
     corner cutting). Each step costs a little more close to walls (a
     distance-transform penalty), so paths keep off the walls the way players do.
@@ -20,10 +30,13 @@ How it works
     tools/fetch_spawns.py). Each target is routed from each of them and only
     the shortest run is kept; "from" in the output is that spawn's index.
 
-tools/routes.json holds the spawns and targets. Run:
+tools/routes.json holds the spawns and targets. tools/route_edits.json holds
+routes fixed by hand in the app (Live > select a route > Edit route): per map,
+side and target, a {"from", "via"} that replaces the target's own. Run:
   python3 tools/make_routes.py                 # all maps
   python3 tools/make_routes.py --map mirage    # one map (others are kept)
   python3 tools/make_routes.py --png DIR       # also draw an overlay per map
+  python3 tools/make_routes.py --apply FILE    # merge the app's download into route_edits.json, rebuild
 
 Needs: pip install numpy pillow scipy
 """
@@ -43,12 +56,34 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from make_polygons import ROOT, floor_mask, load_maps, snap  # noqa: E402
 
 SPEC = ROOT / "tools" / "routes.json"
+EDITS = ROOT / "tools" / "route_edits.json"
 OUT = ROOT / "data" / "routes.js"
 
 SPEED = 250            # game units / second (knife)
 CLEAR_UNITS = 40       # walls closer than this (game units) make a step dearer
 WALL_PENALTY = 1.5     # extra cost per px right next to a wall
 RDP_EPS = 2.5          # simplification tolerance, radar px
+GREY_SAT = 10          # max channel spread of a "grey" (solid object) pixel
+GREY_LUM = 80           # ...and its min brightness; darker grey is floor shading
+
+
+def crosses(p1, p2, a, b):
+    """Which of the moves p1->p2 (arrays of points, shape (n, 2)) properly cross segment a-b.
+    Returns (hit, down): down is True when the move goes from the left of a->b to its right."""
+    a, b = np.asarray(a, float), np.asarray(b, float)
+    d = b - a
+    s1 = d[0] * (p1[:, 1] - a[1]) - d[1] * (p1[:, 0] - a[0])
+    s2 = d[0] * (p2[:, 1] - a[1]) - d[1] * (p2[:, 0] - a[0])
+    e = p2 - p1
+    t1 = e[:, 0] * (a[1] - p1[:, 1]) - e[:, 1] * (a[0] - p1[:, 0])
+    t2 = e[:, 0] * (b[1] - p1[:, 1]) - e[:, 1] * (b[0] - p1[:, 0])
+    # Half-open sides (a point on the line counts as the left/high side, a ledge end
+    # as one side of the move) so stepping onto and off a line, or through a shared
+    # vertex of a polyline, counts as exactly one crossing.
+    # Image y points down, so "right of a->b" is where the cross product is positive.
+    right2 = s2 > 0
+    hit = ((s1 > 0) != right2) & ((t1 > 0) != (t2 > 0))
+    return hit, right2
 
 
 class Level:
@@ -56,6 +91,10 @@ class Level:
 
     def __init__(self, m, level, edits):
         mask = floor_mask(ROOT / m["radar"][level], level)
+        if edits.get("solid_grey"):
+            rgb = np.asarray(Image.open(ROOT / m["radar"][level]).convert("RGB"), dtype=np.int16)
+            grey = (rgb.max(-1) - rgb.min(-1) < GREY_SAT) & (rgb.mean(-1) > GREY_LUM)
+            mask &= ~ndimage.binary_dilation(grey)   # also the anti-aliased rim
         if edits.get("wall_contrast"):
             # Radars whose walls are thin grey lines on the floor, not holes in it:
             # a pixel much darker than the brightest one next to it is a wall.
@@ -90,12 +129,47 @@ class Level:
                 ok &= mask[r1, c2] & mask[r2, c1]
             r1, c1, r2, c2 = r1[ok], c1[ok], r2[ok], c2[ok]
             step = math.hypot(dr, dc)
-            rows.append(idx[r1, c1]); cols.append(idx[r2, c2])
-            w.append(step * (cost[r1, c1] + cost[r2, c2]) / 2)
+            wt = step * (cost[r1, c1] + cost[r2, c2]) / 2
+            # Both directions: ledges make the graph one-way in places.
+            rows += [idx[r1, c1], idx[r2, c2]]; cols += [idx[r2, c2], idx[r1, c1]]; w += [wt, wt]
         rows, cols, w = map(np.concatenate, (rows, cols, w))
+        # Ledges: per edge, the seconds its crossings add (NaN = can't go that way).
+        self.ledges = []
+        for L in edits.get("ledges", []):
+            pts = L["line"]
+            self.ledges += [(a, b, L.get("up"), L.get("down", 0)) for a, b in zip(pts, pts[1:])]
+        extra = np.zeros(len(w))
+        crossed = np.zeros(len(w), bool)
+        if self.ledges:
+            p1 = np.stack([cc[rows], rr[rows]], 1).astype(float)
+            p2 = np.stack([cc[cols], rr[cols]], 1).astype(float)
+            for a, b, up, down in self.ledges:
+                hit, dn = crosses(p1, p2, a, b)
+                crossed |= hit
+                extra[hit & dn] += down
+                extra[hit & ~dn] += np.nan if up is None else up
+        px_per_s = SPEED / m["scale"]
+        keep = ~np.isnan(extra)
+        rows, cols, extra, crossed = rows[keep], cols[keep], extra[keep], crossed[keep]
+        w = w[keep] + extra * px_per_s
         n = len(rr)
         self.graph = sparse.csr_matrix((w, (rows, cols)), shape=(n, n))
+        hit = crossed
+        self.stop_s = {(int(i), int(j)): float(s) for i, j, s in zip(rows[hit], cols[hit], extra[hit])}
         self.cache = {}
+
+    def stops(self, path):
+        """[(index into path, seconds)] for each ledge crossing of the pixel path (seconds may be 0)."""
+        out = []
+        for k, (p, q) in enumerate(zip(path, path[1:])):
+            s = self.stop_s.get((int(self.idx[p[1], p[0]]), int(self.idx[q[1], q[0]])))
+            if s is not None:
+                out.append((k, s))
+        return out
+
+    def crosses_ledge(self, a, b):
+        p1, p2 = np.array([a], float), np.array([b], float)
+        return any(crosses(p1, p2, la, lb)[0][0] for la, lb, _, _ in self.ledges)
 
     def node(self, x, y):
         cx, cy = snap(self.mask, x, y)
@@ -105,7 +179,7 @@ class Level:
         """Pixel path [(x, y), ...] from point a to point b, or None."""
         s, t = self.node(*a), self.node(*b)
         if s not in self.cache:
-            self.cache[s] = csgraph.dijkstra(self.graph, directed=False, indices=s,
+            self.cache[s] = csgraph.dijkstra(self.graph, directed=True, indices=s,
                                              return_predecessors=True)[1]
         pred = self.cache[s]
         if t != s and pred[t] < 0:
@@ -119,7 +193,7 @@ class Level:
         n = max(2, int(math.hypot(b[0] - a[0], b[1] - a[1]) * 2) + 1)
         xs = np.rint(np.linspace(a[0], b[0], n)).astype(int)
         ys = np.rint(np.linspace(a[1], b[1], n)).astype(int)
-        return bool(self.mask[ys, xs].all())
+        return bool(self.mask[ys, xs].all()) and not (self.ledges and self.crosses_ledge(a, b))
 
 
 def rdp(pts, eps, lv):
@@ -157,22 +231,68 @@ def spawn_points(spec):
 
 
 def run(levels, pts):
-    """Path through pts [(x, y, level), ...] as [[level, pixels], ...], or None."""
-    segs = []
-    for (ax, ay, al), (bx, by, bl) in zip(pts, pts[1:]):
+    """Path through pts [(x, y, level, jump), ...] as ([(level, simplified pixels), ...], stops), or None.
+    jump is None (walk there on the floor) or (points, seconds): get there in a straight line
+    through points, ignoring walls and ledges, for a fixed number of seconds (box jumps).
+    stops are [[px along the whole path, seconds], ...] for jumps and costly ledge crossings."""
+    segs = []                   # [level, [("walk", pixels) | ("jump", points, seconds)]]
+    for (ax, ay, al, _), (bx, by, bl, jump) in zip(pts, pts[1:]):
         if al != bl:            # level change: start a new segment at b
             segs.append([bl, []])
+            continue
+        if not segs or segs[-1][0] != al:
+            segs.append([al, []])
+        if jump:
+            segs[-1][1].append(("jump", [tuple(q) for q in jump[0]], jump[1]))
             continue
         p = levels[al].path((ax, ay), (bx, by))
         if p is None:
             return None
-        if not segs or segs[-1][0] != al:
-            segs.append([al, []])
-        segs[-1][1].extend(p if not segs[-1][1] else p[1:])
-    return [(lv, rdp(p, RDP_EPS, levels[lv])) for lv, p in segs if p]
+        segs[-1][1].append(("walk", p))
+    simple, stops, done_px = [], [], 0.0
+    for lv, items in segs:
+        out = []
+        for item in items:
+            if item[0] == "jump":
+                _, jp, s = item
+                if not out:
+                    out.append(jp[0])
+                if s > 0:
+                    stops.append([round(done_px + plen(out), 1), s])
+                out.extend(jp if out[-1] != jp[0] else jp[1:])
+                continue
+            p, start = item[1], 0
+            # Simplify between ledge crossings so the line crosses each where the path does.
+            for k, s in levels[lv].stops(p) + [(len(p) - 1, None)]:
+                piece = rdp(p[start:k + 1], RDP_EPS, levels[lv])
+                out.extend(piece if not out else piece[1:])
+                if s is not None:
+                    if s > 0:
+                        stops.append([round(done_px + plen(out), 1), s])
+                    out.append(p[k + 1])
+                    start = k + 1
+        if out:
+            simple.append((lv, out))
+            done_px += plen(out)
+    return simple, stops
 
 
-def build_map(m, spec, report):
+def waypoint(v):
+    """A "via" entry as (x, y, level or None, jump or None).
+    [x, y] or [x, y, level]: walk there. {"jump": [[x, y], [x, y, s], ...], "s": seconds}:
+    go straight through those points (the last one is where you land), see run(). The
+    time is "s" plus each point's own s (one jump each; a point without one is free)."""
+    if isinstance(v, dict):
+        jp = v["jump"] if isinstance(v["jump"][0], (list, tuple)) else [v["jump"]]
+        s = float(v.get("s", 0)) + sum(float(q[2]) for q in jp if len(q) > 2)
+        jp = [(q[0], q[1]) for q in jp]
+        return (jp[-1][0], jp[-1][1], v.get("level"), (jp, s))
+    return (v[0], v[1], v[2] if len(v) > 2 else None, None)
+
+
+def build_map(m, spec, report, fixes=None):
+    """fixes: {side: {target id: {"from", "via"}}} from route_edits.json, replacing the target's own."""
+    fixes = fixes or {}
     callouts = {c["id"]: c for c in m["callouts"]}
     edits = spec.get("mask", {})
     levels = {lv: Level(m, lv, edits.get(lv, {})) for lv in m["levels"]}
@@ -181,32 +301,51 @@ def build_map(m, spec, report):
     for side in ("T", "CT"):
         for t in spec["targets"][side]:
             t = {"to": t} if isinstance(t, str) else t
+            fix = fixes.get(side, {}).get(t["to"])
+            if fix is not None:
+                t = {"to": t["to"], **{k: v for k, v in fix.items() if v is not None and k in ("from", "via")}}
             c = callouts[t["to"]]
             tlevel = c.get("level", "upper")
-            tail = [(v[0], v[1], v[2] if len(v) > 2 else None) for v in t.get("via", [])]
-            tail.append((c["x"], c["y"], tlevel))
-            # Run it from every spawn on this side and keep only the fastest.
+            tail = [waypoint(v) for v in t.get("via", [])]
+            tail.append((c["x"], c["y"], tlevel, None))
+            # "from" pins the spawn (an index, or a list of them to choose from).
+            only = t.get("from")
+            only = None if only is None else set(only if isinstance(only, list) else [only])
+            # Run it from every allowed spawn on this side and keep only the fastest.
             best = None
             for i, sp in enumerate(spawns[side]):
-                pts = [sp]
-                for x, y, lv in tail[:-1]:
-                    pts.append((x, y, lv or pts[-1][2]))
+                if only is not None and i not in only:
+                    continue
+                pts = [sp + (None,)]
+                for x, y, lv, jump in tail[:-1]:
+                    pts.append((x, y, lv or pts[-1][2], jump))
                 pts.append(tail[-1])
                 if pts[-2][2] != tlevel:
                     continue
-                segs = run(levels, pts)
-                if segs is None:
+                got = run(levels, pts)
+                if got is None:
                     continue
+                segs, stops = got
                 units = sum(plen(p) for _, p in segs) * m["scale"]
-                if best is None or units < best[0]:
-                    best = (units, i, segs)
+                secs = units / SPEED + sum(s for _, s in stops)
+                if best is None or secs < best[0]:
+                    best = (secs, units, i, segs, stops)
             if best is None:
                 report.append(f"{m['id']}: no path {side} -> {t['to']} from any spawn")
                 continue
-            units, i, segs = best
+            secs, units, i, segs, stops = best
             r = {"id": f"{side.lower()}-{t['to']}", "side": side, "to": t["to"], "from": i, "level": tlevel,
                  "path": [v for xy in segs[-1][1] for v in xy],
-                 "units": int(round(units)), "time": round(units / SPEED, 1)}
+                 "units": int(round(units)), "time": round(secs, 1)}
+            if stops:
+                r["stops"] = stops
+            # The hand-set parts, so the app's route editor can start from them.
+            if t.get("from") is not None:
+                r["pin"] = t["from"]
+            if t.get("via"):
+                r["via"] = t["via"]
+            if fix is not None:
+                r["edited"] = True
             if len(segs) > 1:
                 r["segments"] = [{"level": lv, "path": [v for xy in p for v in xy]} for lv, p in segs]
             routes.append(r)
@@ -226,6 +365,18 @@ def fmt(maps):
             "      " + json.dumps(r, separators=(", ", ": ")) for r in m["routes"]) + "\n    ]\n  }"
         blocks.append(s)
     return "\n".join(lines) + "\n" + ",\n".join(blocks) + "\n};\n"
+
+
+def fmt_edits(edits):
+    """route_edits.json with one line per hand-fixed target, so diffs stay readable."""
+    maps = []
+    for mid, sides in edits.items():
+        ss = []
+        for side, targets in sides.items():
+            ts = [f"      {json.dumps(to)}: {json.dumps(fix, separators=(', ', ': '))}" for to, fix in targets.items()]
+            ss.append(f"    {json.dumps(side)}: {{\n" + ",\n".join(ts) + "\n    }")
+        maps.append(f"  {json.dumps(mid)}: {{\n" + ",\n".join(ss) + "\n  }")
+    return "{\n" + ",\n".join(maps) + "\n}\n" if maps else "{}\n"
 
 
 def load_routes():
@@ -249,6 +400,12 @@ def draw(m, data, levels, png_dir, show_mask):
             img = Image.alpha_composite(img, Image.fromarray(tint))
         img = Image.alpha_composite(bg, img)
         d = ImageDraw.Draw(img)
+        for a, b, up, _ in levels[lv].ledges:   # magenta: climbable, red: drop only; tick = low side
+            col = (255, 0, 255, 255) if up is not None else (255, 40, 40, 255)
+            d.line([tuple(a), tuple(b)], fill=col, width=2)
+            mx, my, dx, dy = (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, b[0] - a[0], b[1] - a[1]
+            n = math.hypot(dx, dy) or 1
+            d.line([(mx, my), (mx - dy / n * 5, my + dx / n * 5)], fill=col, width=2)
         for r in data["routes"]:
             col = COLORS[r["side"]]
             segs = r.get("segments") or [{"level": r["level"], "path": r["path"]}]
@@ -285,18 +442,38 @@ def main():
     ap.add_argument("--map", help="only this map id, e.g. mirage")
     ap.add_argument("--png", help="write an overlay image per map into this folder")
     ap.add_argument("--mask", action="store_true", help="tint the walkable mask in the overlay")
+    ap.add_argument("--apply", metavar="FILE", help="merge route edits downloaded from the app into "
+                    "tools/route_edits.json, then rebuild the maps they touch")
     args = ap.parse_args()
     _, maps = load_maps()
     spec = json.loads(SPEC.read_text())
-    done = load_routes() if args.map else {}
+    edits = json.loads(EDITS.read_text()) if EDITS.exists() else {}
+    only = {args.map} if args.map else None
+    if args.apply:
+        new = json.loads(pathlib.Path(args.apply).read_text())
+        new = new.get("routeEdits", new)       # the app's download wraps them
+        for mid, sides in new.items():
+            for side, targets in sides.items():
+                for to, fix in targets.items():
+                    cur = edits.setdefault(mid, {}).setdefault(side, {})
+                    if fix is None:            # null removes a hand fix
+                        cur.pop(to, None)
+                    else:
+                        cur[to] = {k: fix[k] for k in ("from", "via") if fix.get(k) is not None}
+                    print(f"{mid}: {side} -> {to} {'reset' if fix is None else 'set by hand'}")
+        edits = {mid: {sd: t for sd, t in sides.items() if t} for mid, sides in edits.items()}
+        edits = {mid: sides for mid, sides in edits.items() if sides}
+        EDITS.write_text(fmt_edits(edits))
+        only = (only or set()) | set(new)
+    done = load_routes() if only else {}
     report = []
     for m in maps:
-        if args.map and m["id"] != args.map:
+        if only and m["id"] not in only:
             continue
         if m["id"] not in spec:
             report.append(f"{m['id']}: not in routes.json")
             continue
-        data, levels = build_map(m, spec[m["id"]], report)
+        data, levels = build_map(m, spec[m["id"]], report, edits.get(m["id"]))
         done[m["id"]] = data
         times = ", ".join(f"{r['id']} {r['time']}" for r in data["routes"])
         print(f"{m['id']}: {len(data['routes'])} routes  ({times})")

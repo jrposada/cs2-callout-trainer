@@ -83,6 +83,52 @@
 .live-pulse.ct { stroke: var(--ct-dot); }
 @keyframes live-pulse { from { transform: scale(0.25); opacity: 1; } to { transform: scale(1.3); opacity: 0; } }
 
+/* Route editor (js/route-edit.js) */
+.live-list .ed { flex: none; color: var(--t-gold); font-size: 13px; }
+.live-edit-row { flex-wrap: wrap; gap: 8px; }
+.live-edit-row .kbd-hint { flex: 1 1 180px; }
+.re-head { display: flex; align-items: center; gap: 10px; }
+.re-title { margin: 0; flex: 1; min-width: 0; font: 700 26px/1.1 var(--display); }
+.re-side { font: 700 15px/1 var(--display); color: var(--t-gold); }
+.re-side.side-ct { color: var(--ct-dot); }
+.re-help { margin: 0; }
+.re-pts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.re-pts li { display: flex; align-items: center; gap: 8px; padding: 2px 4px; border-radius: var(--radius-s); }
+.re-pts li.is-sel { background: var(--raised); }
+.re-pts .seg button { height: 28px; padding: 0 9px; }
+.re-pick { width: 28px; height: 28px; border: 1px solid var(--line); border-radius: 50%; background: transparent; color: var(--text); font: 700 14px/1 var(--display); }
+.re-pick[aria-pressed="true"] { border-color: var(--text); }
+.re-xy { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.re-s { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-size: 13px; }
+.re-s input { width: 58px; height: 28px; padding: 0 6px; border: 1px solid var(--line); border-radius: var(--radius-s); background: var(--ink-deep); color: var(--text); font: inherit; }
+.re-del { margin-left: auto; }
+.re-json { margin: 0; padding: 8px 10px; max-height: 120px; overflow: auto; white-space: pre-wrap; word-break: break-all; border: 1px solid var(--line); border-radius: var(--radius-s); background: var(--ink-deep); color: var(--muted); font-size: 12px; }
+
+.re-old { fill: none; stroke-width: 4; opacity: 0.4; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }
+.re-old.t, .re-leg.t { stroke: var(--t-gold); }
+.re-old.ct, .re-leg.ct { stroke: var(--ct-dot); }
+.re-leg { stroke-width: 2; vector-effect: non-scaling-stroke; stroke-linecap: round; }
+.re-leg.walk { stroke-dasharray: 5 4; opacity: 0.9; }
+.re-leg.straight { stroke-width: 3; stroke: var(--text); }
+.re-spawn { fill: rgba(14, 18, 23, 0.6); stroke-width: 1.5; vector-effect: non-scaling-stroke; cursor: pointer; opacity: 0.7; }
+.re-spawn.t { stroke: var(--t-gold); }
+.re-spawn.ct { stroke: var(--ct-dot); }
+.re-spawn.is-used { stroke-dasharray: 3 2; stroke-width: 2.5; opacity: 1; }
+.re-spawn.is-pinned { stroke-width: 3; opacity: 1; }
+.re-spawn.is-pinned.t { fill: var(--t-gold); }
+.re-spawn.is-pinned.ct { fill: var(--ct-dot); }
+.re-end { fill: none; stroke: var(--text); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.re-pt { stroke: var(--ink-deep); stroke-width: 1.5; vector-effect: non-scaling-stroke; cursor: grab; }
+.re-pt.walk { fill: var(--text); }
+.re-pt.jump { fill: var(--t-gold); }
+.re-pt.over { fill: var(--muted); }
+.re-pt.is-sel { stroke: var(--text); stroke-width: 3; }
+.re-num {
+  font-family: var(--display); font-weight: 700; fill: var(--text); pointer-events: none;
+  paint-order: stroke; stroke: rgba(14, 18, 23, 0.92); stroke-width: 3.5px; stroke-linejoin: round;
+}
+.re-num.is-spawn { text-anchor: middle; }
+
 @media (max-width: 860px) {
   .live-clock { font-size: 60px; }
   .mode-live .kbd-hint { display: none; }
